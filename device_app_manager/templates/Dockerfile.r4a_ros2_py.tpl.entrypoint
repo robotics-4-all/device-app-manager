@@ -1,0 +1,11 @@
+FROM {{ image }}
+
+COPY {{ app_src_dir }} {{ app_dest_dir }}
+
+COPY tek_entrypoint.sh /
+
+ENTRYPOINT ["tek_entrypoint.sh"]
+
+WORKDIR {{ app_dest_dir }}
+
+CMD ["python3", "./app.py"]
