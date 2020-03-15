@@ -1,8 +1,9 @@
-# thing-app-manager
+# device-app-manager
 Component for remotely deploying Applications on Things
 
 ## Usage
 
+### Application Manager Daemon
 ```bash
 [I] ➜ ./app_manager.py --help
 usage: app_manager.py [-h] [--host HOST] [--port PORT] [--vhost VHOST] [--username USERNAME] [--password PASSWORD] [--queue-size QUEUE_SIZE] [--debug [DEBUG]]
@@ -24,6 +25,40 @@ optional arguments:
 
 Username defines the unique id of the device (`{thing_id}`).
 
+### Start Application Example
+
+An example demonstrating application deployment call can be found in
+`examlles/` examples folder.
+
+Usage example:
+
+```bash
+./start_app.py \
+    --device-id device2 \
+    --host 155.207.33.189 \
+    --port 5782 \
+    --vhost / \
+    --debug \
+    --fpath py3_app.tar.gz \
+    --app-type py3
+```
+
+### Stop Application Example
+
+An example demonstrating application kill call can be found in
+`examlles/` examples folder.
+
+Usage example:
+
+```bash
+/stop_app.py \
+    --app-id f6d5fdf5 \
+    --device-id device2 \
+    --host 155.207.33.189 \
+    --port 5782 \
+    --vhost / \
+    --debug
+```
 
 ## Application Manager Endpoints
 
