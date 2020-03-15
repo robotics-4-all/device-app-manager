@@ -1,6 +1,78 @@
 # device-app-manager
 Component for remotely deploying Applications on Things
 
+## Supported Application Deployments
+
+### Python3 Application
+
+This kind of application is not stored locally and it is destroyed after
+execution.
+
+Tarball contents:
+
+- `app.py`: python executable
+- `requirements.txt`: python package dependencies file
+
+### R4A Python3 Application
+
+Tarball contents:
+
+- `app.py`: python executable
+- `requirements.txt`: python package dependencies file
+- `init.conf`: Describes the necessary variables (and their types, but not the values) the app needs to correctly operate.
+- `app.info`: Gives information of the application
+- `exec.conf`: Scheduling parameters and stored here. This file is used by the
+  application scheduler.
+
+Example `init.conf`:
+
+```yaml
+params:
+  - name: <string>
+     type: <type>
+     value: <>
+  - name: <string>
+     type: <type>
+     value: <>
+```
+
+where `<type>` is an enumeration and supports the following values:
+
+- `string`
+- `float`
+- `int`
+- `array`
+
+Example `app.info`:
+
+```yaml
+version: <string>
+elsa_version: <string>
+description: <string>
+tags: <array_of_strings>
+```
+
+Example `exec.conf`:
+
+```yaml
+priority: <int>
+execution_timestamp: <timestamp>
+retry: <bool>
+max_retries: <int>
+```
+
+
+### R4A Python3 Application
+
+Tarball contents:
+
+- `app.py`: python executable
+- `requirements.txt`: python package dependencies file
+- `init.conf`: Describes the necessary variables (and their types, but not the values) the app needs to correctly operate.
+- `app.info`: Gives information of the application
+- `exec.conf`: Scheduling parameters and stored here. This file is used by the
+  application scheduler.
+
 ## Usage
 
 ### Application Manager Daemon
