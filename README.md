@@ -29,11 +29,11 @@ Example `init.conf`:
 ```yaml
 params:
   - name: <string>
-     type: <type>
-     value: <>
+    type: <type>
+    value: <>
   - name: <string>
-     type: <type>
-     value: <>
+    type: <type>
+    value: <>
 ```
 
 where `<type>` is an enumeration and supports the following values:
@@ -61,17 +61,6 @@ retry: <bool>
 max_retries: <int>
 ```
 
-
-### R4A Python3 Application
-
-Tarball contents:
-
-- `app.py`: python executable
-- `requirements.txt`: python package dependencies file
-- `init.conf`: Describes the necessary variables (and their types, but not the values) the app needs to correctly operate.
-- `app.info`: Gives information of the application
-- `exec.conf`: Scheduling parameters and stored here. This file is used by the
-  application scheduler.
 
 ## Usage
 
