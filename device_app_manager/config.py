@@ -18,5 +18,6 @@ class Config(object):
         "platform_host",
         "platform_vhost"
     ]
+
     def __init__(self, *args, **kwargs):
         pass

@@ -13,13 +13,13 @@ import uuid
 import time
 import signal
 import json
-import argparse
 import subprocess
 import shutil
 import shlex
 # from collections import namedtuple
 
 import base64
+import configparser
 
 from amqp_common import (
     ConnectionParameters,
@@ -28,8 +28,8 @@ from amqp_common import (
     RpcServer
 )
 
-from _logging import create_logger
-from deployments import *
+from ._logging import create_logger
+from .deployments import *
 
 
 class Protocol(object):
@@ -60,6 +60,19 @@ class RemoteLogger(object):
     def log(self, msg):
         pass
 
+
+class AppManagerProtocol(object):
+    def __init__(self):
+        pass
+
+    def rpc_deployapp(self):
+        pass
+
+    def rpc_isalive(self):
+        pass
+
+    def rpc_killapp(self):
+        pass
 
 
 class AppManager(object):
@@ -119,6 +132,10 @@ class AppManager(object):
 
         self._create_deployment_dir()
         atexit.register(self._cleanup)
+
+    def load_cfg(self, cfg_file):
+        config = configparser.ConfigParser()
+        config.read(cfg_file)
 
     def _init_platform_params(self):
         self.broker_conn_params = ConnectionParameters(
@@ -203,17 +220,18 @@ class AppManager(object):
 
     def _kill_app_rpc_callback(self, msg, meta):
         app_id = msg['app_id']
-        if app_id not in self.apps:
-            self.log.error('App does not exist: {}'.format(app_id))
-            return Protocol.response_error(
-                404, 'App [{}] does not exist'.format(app_id))
-        app = self.apps[app_id]
-        app.stop()
-        del self.apps[app_id]
-        self.log.error('App {} killed!'.format(app_id))
-        return {
-            'status': 200
-        }
+        try:
+            r = self.kill_app(app_id)
+            return {
+                'status': 200,
+                'error': ''
+            }
+        except Exception as e:
+            self.log.error(e, exc_info=True)
+            return {
+                'status': 404,
+                'error': str(e)
+            }
 
     def _isalive_rpc_callback(self, msg, meta):
         return {
@@ -237,12 +255,16 @@ class AppManager(object):
             with open(tarball_path, 'wb') as f:
                 f.write(tarball_decoded)
 
-            resp = self.deploy_app(app_type, tarball_path)
-            return resp
+            app_id = self.deploy_app(app_type, tarball_path)
+            return {
+                'status': 200,
+                'app_id': app_id,
+                'error': ''
+            }
         except Exception as e:
             self.log.error(e, exc_info=True)
             return {
-                'status': 400,
+                'status': 404,
                 'app_id': -1,
                 'error': str(e)
             }
@@ -299,52 +321,15 @@ class AppManager(object):
         self.apps[app_id] = app_deployment
         return app_id
 
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Application Manager CLI')
-    parser.add_argument('--host', dest='host',
-                        help='AMQP broker host (IP/Hostname)',
-                        default='localhost')
-    parser.add_argument('--port', dest='port',
-                        help='AMQP broker listening port',
-                        default='5672')
-    parser.add_argument('--vhost', dest='vhost',
-                        help='Virtual host to connect to.',
-                        default='/')
-    parser.add_argument('--username', dest='username',
-                        help='Authentication username',
-                        default='bot')
-    parser.add_argument('--password', dest='password',
-                        help='Authentication password',
-                        default='b0t')
-    parser.add_argument('--queue-size', dest='queue_size',
-                        help='Maximum queue size.',
-                        type=int,
-                        default=10)
-    parser.add_argument('--heartbeat', dest='heartbeat',
-                        help='Heartbeat interval in seconds',
-                        type=int,
-                        default=10)
-    parser.add_argument('--debug', dest='debug',
-                        help='Enable debugging',
-                        type=bool,
-                        const=True,
-                        nargs='?')
-
-    args = parser.parse_args()
-    username = args.username
-    password = args.password
-    host = args.host
-    port = args.port
-    vhost = args.vhost
-    debug = args.debug
-    heartbeat = args.heartbeat
-
-    manager = AppManager(
-        platform_creds=(username, password),
-        platform_host=host,
-        platform_port=port,
-        platform_vhost=vhost,
-        heartbeat_interval=heartbeat
-    )
-    manager.run()
+    def kill_app(self, app_id):
+        if app_id not in self.apps:
+            self.log.error('App does not exist: {}'.format(app_id))
+            raise TypeError('Application with id={} does not exist'.format(
+                app_id))
+        app = self.apps[app_id]
+        app.stop()
+        del self.apps[app_id]
+        self.log.info('App {} killed!'.format(app_id))
+        return {
+            'status': 200
+        }

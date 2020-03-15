@@ -14,7 +14,7 @@ import threading
 
 from jinja2 import Template
 
-from _logging import create_logger
+from ._logging import create_logger
 
 from amqp_common import (
     ConnectionParameters,
@@ -196,7 +196,13 @@ class AppDeployment(object):
             if stop_event.is_set():
                 break
 
-    def run_container(self, image_id, deployment_id, detach=True):
+    def run_container(
+            self,
+            image_id,
+            deployment_id,
+            detach=True,
+            privileged=False
+    ):
         container = self.docker_client.containers.run(
             image_id,
             name=image_id,
@@ -205,10 +211,11 @@ class AppDeployment(object):
             # network='host',
             network_mode='host',
             ipc_mode='host',
-            pid_mode='host'
+            pid_mode='host',
             # publish_all_ports=True,
             # remove=True
         )
+        print(container)
         self.log.debug('[*] - Container created!')
         self.container = container
         self.container_id = container.id
