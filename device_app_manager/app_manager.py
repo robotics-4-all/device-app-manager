@@ -10,11 +10,6 @@ from __future__ import (
 import sys
 import os
 import uuid
-import tarfile
-from jinja2 import Template
-import docker
-import atexit
-import threading
 import time
 import signal
 import json
@@ -232,7 +227,17 @@ class AppManager(object):
             app_type = msg['app_type']
             app_file = msg['app_tarball']
             tarball_b64 = app_file['data']
-            resp = self.deploy_app
+
+            tarball_decoded = base64.b64decode(tarball_b64)
+            u_id = uuid.uuid4().hex[0:8]
+            tarball_path = os.path.join(
+                self.DEPLOYMENT_BASEDIR,
+                'app-{}.tar.gz'.format(u_id)
+            )
+            with open(tarball_path, 'wb') as f:
+                f.write(tarball_decoded)
+
+            resp = self.deploy_app(app_type, tarball_path)
             return resp
         except Exception as e:
             self.log.error(e, exc_info=True)
@@ -279,26 +284,15 @@ class AppManager(object):
             self._cleanup()
 
     def deploy_app(self, app_type, app_tarball):
-        tarball_decoded = base64.b64decode(app_tarball)
-
-        deployment_id = uuid.uuid4().hex[0:8]
-
-        tarball_path = os.path.join(
-            self.DEPLOYMENT_BASEDIR,
-            'app-{}.tar.gz'.format(deployment_id))
-
-        with open(tarball_path, 'wb') as f:
-            f.write(tarball_decoded)
-
         # Add here more deployment options.
         # TODO: The way deployment definition works much change to module-based.
         # Generalize the way so that it is easier to maintain extentions.
         if app_type == 'py3':
             app_deployment = AppDeploymentPython3(self.broker_conn_params,
-                                                  tarball_path)
+                                                  app_tarball)
         elif app_type == 'r4a_ros2_py':
             app_deployment = AppDeploymentR4AROS2Py(
-                self.broker_conn_params, tarball_path)
+                self.broker_conn_params, app_tarball)
         else:
             raise TypeError('Application type <{}> not supported'.format(app_type))
         app_id = app_deployment.start()

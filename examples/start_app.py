@@ -1,7 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from __future__ import print_function
+from __future__ import (
+    absolute_import,
+    division,
+    print_function,
+    unicode_literals
+)
 
 import sys
 import argparse
@@ -97,5 +102,5 @@ if __name__ == "__main__":
     msg = AppDeployMessage(fmsg, app_type)
 
     rpc_client.debug = True
-    resp = rpc_client.call(msg, timeout=30)
+    resp = rpc_client.call(msg.serialize_json(), timeout=30)
     print('[*] - Response:\n{}'.format(resp))
