@@ -19,7 +19,6 @@ import shlex
 # from collections import namedtuple
 
 import base64
-import configparser
 
 from amqp_common import (
     ConnectionParameters,
@@ -86,6 +85,7 @@ class AppManager(object):
     PLATFORM_PORT = '5672'
     PLATFORM_HOST = '155.207.33.189'
     PLATFORM_VHOST = '/'
+    HEARTBEAT_INTERVAL = 10  # seconds
 
     def __init__(self,
                  platform_creds=('guest', 'guest'),
@@ -132,10 +132,6 @@ class AppManager(object):
 
         self._create_deployment_dir()
         atexit.register(self._cleanup)
-
-    def load_cfg(self, cfg_file):
-        config = configparser.ConfigParser()
-        config.read(cfg_file)
 
     def _init_platform_params(self):
         self.broker_conn_params = ConnectionParameters(
