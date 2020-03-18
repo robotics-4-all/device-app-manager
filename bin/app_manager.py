@@ -52,6 +52,26 @@ def load_cfg(cfg_file=None):
         heartbeat_interval = config.get('core', 'heartbeat_interval')
     except configparser.NoOptionError:
         heartbeat_interval = 10  # seconds
+    try:
+        app_deploy_rpc_name = config.get('core', 'app_deploy_rpc_name')
+    except configparser.NoOptionError:
+        app_deploy_rpc_name = 'thing.x.appmanager.deploy'
+    try:
+        app_kill_rpc_name = config.get('core', 'app_kill_rpc_name')
+    except configparser.NoOptionError:
+        app_kill_rpc_name = 'thing.x.appmanager.kill'
+    try:
+        alive_rpc_name = config.get('core', 'alive_rpc_name')
+    except configparser.NoOptionError:
+        alive_rpc_name = 'thing.x.appmanager.is_alive'
+    try:
+        connected_event = config.get('core', 'connected_event')
+    except configparser.NoOptionError:
+        connected_event = 'thing.x.appmanager.connected'
+    try:
+        disconnected_event = config.get('core', 'disconnected_event')
+    except configparser.NoOptionError:
+        disconnected_event = 'thing.x.appmanager.disconnected'
 
     return {
         'username': username,
@@ -60,7 +80,12 @@ def load_cfg(cfg_file=None):
         'port': int(port),
         'vhost': vhost,
         'heartbeat_interval': int(heartbeat_interval),
-        'heartbeat_topic': heartbeat_topic
+        'heartbeat_topic': heartbeat_topic,
+        'app_deploy_rpc_name': app_deploy_rpc_name,
+        'app_kill_rpc_name': app_kill_rpc_name,
+        'alive_rpc_name': alive_rpc_name,
+        'connected_event': connected_event,
+        'disconnected_event': disconnected_event
     }
 
 
@@ -122,6 +147,10 @@ def main():
         config['vhost'] = vhost
     if heartbeat is not None:
         config['heartbeat_interval'] = heartbeat_interval
+    if debug:
+        debug = True
+    else:
+        debug = False
 
     print(config)
 
@@ -130,7 +159,15 @@ def main():
         platform_host=config['host'],
         platform_port=config['port'],
         platform_vhost=config['vhost'],
-        heartbeat_interval=config['heartbeat_interval']
+        heartbeat_interval=config['heartbeat_interval'],
+        heartbeat_topic=config['heartbeat_topic'],
+        app_deploy_rpc_name=config['app_deploy_rpc_name'],
+        app_kill_rpc_name=config['app_kill_rpc_name'],
+        alive_rpc_name=config['alive_rpc_name'],
+        connected_event=config['connected_event'],
+        disconnected_event=config['disconnected_event'],
+        debug=debug
+
     )
     manager.run()
 
