@@ -20,6 +20,8 @@ import shlex
 
 import base64
 
+import redis
+
 from amqp_common import (
     ConnectionParameters,
     Credentials,
@@ -75,7 +77,7 @@ class AppManagerProtocol(object):
 
 
 class AppManager(object):
-    DEPLOYMENT_BASEDIR = '/tmp/app-deployments'
+    APP_STORAGE_DIR = '~/.apps'
     APP_DEPLOY_RPC_NAME = 'thing.x.appmanager.deploy'
     APP_KILL_RPC_NAME = 'thing.x.appmanager.kill'
     ISALIVE_RPC_NAME = 'thing.x.appmanager.is_alive'
@@ -124,13 +126,15 @@ class AppManager(object):
         if platform_vhost is not None:
             self.PLATFORM_VHOST = platform_vhost
 
+        self.APP_STORAGE_DIR = os.path.expanduser(self.APP_STORAGE_DIR)
+
         self._heartbeat_data = {}
         self._heartbeat_thread = None
         self.apps = {}
 
         self.__init_logger()
 
-        self._create_deployment_dir()
+        self._create_app_storage_dir()
         atexit.register(self._cleanup)
 
     def _init_platform_params(self):
@@ -153,9 +157,9 @@ class AppManager(object):
         for key in self.apps:
             self.apps[key].stop()
 
-    def _create_deployment_dir(self):
-        if not os.path.exists(self.DEPLOYMENT_BASEDIR):
-            os.mkdir(self.DEPLOYMENT_BASEDIR)
+    def _create_app_storage_dir(self):
+        if not os.path.exists(self.APP_STORAGE_DIR):
+            os.mkdir(self.APP_STORAGE_DIR)
 
     def _init_heartbeat_pub(self):
         self._heartbeat_pub = PublisherSync(
@@ -236,20 +240,14 @@ class AppManager(object):
 
     def _deploy_app_rpc_callback(self, msg, meta):
         try:
-            # self.log.debug(meta)
-            self.log.info(msg)
             app_type = msg['app_type']
             app_file = msg['app_tarball']
+            # Optional. Empty app_name means unnamed app
+            app_name = msg['app_name'] if 'app_name' in msg else ''
             tarball_b64 = app_file['data']
 
-            tarball_decoded = base64.b64decode(tarball_b64)
-            u_id = uuid.uuid4().hex[0:8]
-            tarball_path = os.path.join(
-                self.DEPLOYMENT_BASEDIR,
-                'app-{}.tar.gz'.format(u_id)
-            )
-            with open(tarball_path, 'wb') as f:
-                f.write(tarball_decoded)
+            tarball_path = self._store_app_tar(
+                tarball_b64, self.APP_STORAGE_DIR)
 
             app_id = self.deploy_app(app_type, tarball_path)
             return {
@@ -264,6 +262,50 @@ class AppManager(object):
                 'app_id': -1,
                 'error': str(e)
             }
+
+    def _download_app_rpc_callback(self, msg, meta):
+        try:
+            app_type = msg['app_type']
+            app_file = msg['app_tarball']
+            # Optional. Empty app_name means unnamed app
+            app_name = msg['app_name'] if 'app_name' in msg else ''
+            tarball_b64 = app_file['data']
+
+            tarball_path = self._store_app_tar(
+                tarball_b64, self.APP_STORAGE_DIR)
+
+            ## TODO: Store in db
+            return {
+                'status': 200,
+                'app_id': app_id,
+                'error': ''
+            }
+        except Exception as e:
+            self.log.error(e, exc_info=True)
+            return {
+                'status': 404,
+                'app_id': -1,
+                'error': str(e)
+            }
+
+    def _start_app_rpc_callback(self, msg, meta):
+        try:
+            # Optional. Empty app_name means unnamed app
+            app_name = msg['app_name'] if 'app_name' in msg else ''
+
+            ## TODO: Not implemented!!
+
+            return {
+                'status': 200,
+                'error': ''
+            }
+        except Exception as e:
+            self.log.error(e, exc_info=True)
+            return {
+                'status': 404,
+                'error': str(e)
+            }
+
     def _send_connected_event(self):
         p = PublisherSync(
             self.THING_CONNECTED_EVENT.replace(
@@ -329,3 +371,14 @@ class AppManager(object):
         return {
             'status': 200
         }
+
+    def _store_app_tar(self, tar_b64, dest_dir):
+        tarball_decoded = base64.b64decode(tar_b64)
+        u_id = uuid.uuid4().hex[0:8]
+        tarball_path = os.path.join(
+            self.APP_STORAGE_DIR,
+            'app-{}.tar.gz'.format(u_id)
+        )
+        with open(tarball_path, 'wb') as f:
+            f.write(tarball_decoded)
+            return tarball_path

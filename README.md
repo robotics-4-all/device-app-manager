@@ -46,6 +46,7 @@ where `<type>` is an enumeration and supports the following values:
 Example `app.info`:
 
 ```yaml
+name: <string>
 version: <string>
 elsa_version: <string>
 description: <string>

@@ -33,7 +33,7 @@ class AppDeployment(object):
     IMAGE = 'python:3.7-alpine'
     APP_DEST_DIR = '/app'
     APP_SRC_DIR = './app'
-    DEPLOYMENT_BASEDIR = '/tmp/app-deployments'
+    TEMP_DIR = '/tmp/app-deployments'
     # If set to tcp can deploy remotely
     DOCKER_DAEMONN_URL = 'unix://var/run/docker.sock'
 
@@ -248,15 +248,15 @@ class AppDeployment(object):
             'stop_event': t_stop_event
         }
 
-    def deploy(self, app_tarball_path, deployment_id=None):
-        deployment_dir = os.path.join(self.DEPLOYMENT_BASEDIR,
-                                      self.deployment_id)
+    def deploy(self, app_tarball_path):
+        tmp_dir = os.path.join(self.TEMP_DIR,
+                               self.deployment_id)
 
-        if not os.path.exists(deployment_dir):
-            os.mkdir(deployment_dir)
+        if not os.path.exists(tmp_dir):
+            os.mkdir(tmp_dir)
 
-        app_src_dir = os.path.join(deployment_dir, 'app')
-        dockerfile_path = os.path.join(deployment_dir, 'Dockerfile')
+        app_src_dir = os.path.join(tmp_dir, 'app')
+        dockerfile_path = os.path.join(tmp_dir, 'Dockerfile')
         image_id = 'app-{}'.format(self.deployment_id)
         self.image_id = image_id
 
@@ -265,7 +265,7 @@ class AppDeployment(object):
                                          self.dockerfile_tpl,
                                          dockerfile_path)
 
-        self._build_image(deployment_dir, image_id)
+        self._build_image(tmp_dir, image_id)
         _ = self.run_container(image_id, self.deployment_id)
         return self.deployment_id
 
