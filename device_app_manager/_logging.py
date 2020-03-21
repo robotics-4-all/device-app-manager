@@ -41,6 +41,11 @@ logging.addLevelName(
     '\033[1;34m%s\033[1;0m' % logging.getLevelName(logging.DEBUG)
 )
 
+def disable_debug(logger):
+    logger.setLevel(logging.INFO)
+
+def enable_debug(logger):
+    logger.setLevel(logging.DEBUG)
 
 def create_logger(namespace):
     """Tiny wrapper around python's logging module"""

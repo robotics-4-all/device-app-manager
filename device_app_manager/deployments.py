@@ -29,17 +29,19 @@ class AppDeployment(object):
     PLATFORM_APP_STATS_TOPIC_TPL = 'thing.x.app.y.stats'
     APP_STARTED_EVENT = 'thing.x.app.y.started'
     APP_STOPED_EVENT = 'thing.x.app.y.stoped'
-    TEMP_DIR = '/tmp/app-deployments'
+    TMP_DIR = '/tmp/app-deployments'
     IMAGE = 'python:3.7-alpine'
     APP_DEST_DIR = '/app'
     APP_SRC_DIR = './app'
-    TEMP_DIR = '/tmp/app-deployments'
+    TMP_DIR = '/tmp/app-deployments'
     # If set to tcp can deploy remotely
     DOCKER_DAEMONN_URL = 'unix://var/run/docker.sock'
 
     def __init__(
         self,
         platform_params,
+        app_name,
+        app_type,
         app_tarball_path,
         group=None,
         target=None,
@@ -52,9 +54,14 @@ class AppDeployment(object):
     ):
         self.args = args
         self.kwargs = kwargs
+
+        self.app_name = app_name
+        self.app_type = app_type
+        self.app_tarball_path = app_tarball_path
+
         self.platform_params = platform_params
         self.platform_creds = platform_params.credentials
-        self.app_tarball_path = app_tarball_path
+
         self.remote_logging = remote_logging
         self.send_app_stats = send_app_stats
 
@@ -62,30 +69,26 @@ class AppDeployment(object):
         self.image = None
         self.script_dir = os.path.dirname(os.path.realpath(__file__))
 
-        self.deployment_id = self._gen_uid()
-        self.container_id = self.deployment_id
-        self.app_id = self.deployment_id
-        self.image_id = 'app-{}'.format(self.deployment_id)
+        # Register callback for garbage collector exit. Cleanup.
+        atexit.register(self._cleanup)
+
+        self.app_name = self._gen_uid() if not self.app_name else self.app_name
+        self.image_id = 'app-{}'.format(self.app_name)
+        self.container_id = None
 
         # Instantiate a docker client
         # self.docker_client = docker.APIClient(base_url=self.DOCKER_DAEMONN_URL)
         self.docker_client = docker.from_env()
         self.__init_logger()
-        atexit.register(self._cleanup)
 
     def __init_logger(self):
         """Initialize Logger."""
         self.log = create_logger(
-            self.__class__.__name__ + '-' + self.deployment_id)
+            self.__class__.__name__ + '-' + self.app_name)
 
-    def start(self):
-        deployment_id = self.deploy(self.app_tarball_path)
-        if deployment_id:
-            self._send_appstarted_event(self.app_id)
-        return deployment_id
 
     def stop(self):
-        self._send_appstoped_event(self.app_id)
+        self._send_appstoped_event(self.app_name)
         self._cleanup()
 
     def _create_dockerfile_from_tpl(self, app_src_dir, tpl_path, dest_path):
@@ -118,10 +121,11 @@ class AppDeployment(object):
         )
         for l in logs:
             self.log.debug(l)
+        self.log.info('Created docker image <{}>'.format(image_id))
 
-    def _send_appstarted_event(self, app_id):
+    def _send_appstarted_event(self, app_name):
         event_uri = self.APP_STARTED_EVENT.replace(
-            'x', self.platform_creds.username).replace('y', app_id)
+            'x', self.platform_creds.username).replace('y', app_name)
 
         p = PublisherSync(
             event_uri,
@@ -132,9 +136,9 @@ class AppDeployment(object):
         p.close()
         del p
 
-    def _send_appstoped_event(self, app_id):
+    def _send_appstoped_event(self, app_name):
         event_uri = self.APP_STOPED_EVENT.replace(
-            'x', self.platform_creds.username).replace('y', app_id)
+            'x', self.platform_creds.username).replace('y', app_name)
 
         p = PublisherSync(
             event_uri,
@@ -145,10 +149,10 @@ class AppDeployment(object):
         p.close()
         del p
 
-    def _app_log_publish_loop(self, app_id, stop_event):
+    def _app_log_publish_loop(self, app_name, stop_event):
         topic_logs = self.PLATFORM_APP_LOGS_TOPIC_TPL.replace(
                 'x', self.platform_creds.username).replace(
-                        'y', app_id)
+                        'y', app_name)
         app_logs_pub = PublisherSync(
                 topic_logs, connection_params=self.platform_params,
                 debug=False)
@@ -171,10 +175,10 @@ class AppDeployment(object):
             if stop_event.is_set():
                 break
 
-    def _app_stats_publish_loop(self, app_id, stop_event):
+    def _app_stats_publish_loop(self, app_name, stop_event):
         topic_stats = self.PLATFORM_APP_STATS_TOPIC_TPL.replace(
                 'x', self.platform_creds.username).replace(
-                        'y', app_id)
+                        'y', app_name)
 
         app_stats_pub = PublisherSync(
                 topic_stats, connection_params=self.platform_params,
@@ -226,10 +230,10 @@ class AppDeployment(object):
         if self.send_app_stats:
             self.detach_app_stats(deployment_id)
 
-    def detach_app_logging(self, app_id):
+    def detach_app_logging(self, app_name):
         t_stop_event = threading.Event()
         t = threading.Thread(target=self._app_log_publish_loop,
-                             args=(app_id, t_stop_event))
+                             args=(app_name, t_stop_event))
         t.daemon = True
         t.start()
         self.app_log_thread = {
@@ -237,10 +241,10 @@ class AppDeployment(object):
             'stop_event': t_stop_event
         }
 
-    def detach_app_stats(self, app_id):
+    def detach_app_stats(self, app_name):
         t_stop_event = threading.Event()
         t = threading.Thread(target=self._app_stats_publish_loop,
-                             args=(app_id, t_stop_event))
+                             args=(app_name, t_stop_event))
         t.daemon = True
         t.start()
         self.app_stats_thread = {
@@ -248,26 +252,29 @@ class AppDeployment(object):
             'stop_event': t_stop_event
         }
 
-    def deploy(self, app_tarball_path):
-        tmp_dir = os.path.join(self.TEMP_DIR,
-                               self.deployment_id)
 
+    def build(self):
+        tmp_dir = os.path.join(self.TMP_DIR,
+                               self.app_name)
+
+        # Create temp dir if it does not exist
         if not os.path.exists(tmp_dir):
             os.mkdir(tmp_dir)
 
         app_src_dir = os.path.join(tmp_dir, 'app')
         dockerfile_path = os.path.join(tmp_dir, 'Dockerfile')
-        image_id = 'app-{}'.format(self.deployment_id)
-        self.image_id = image_id
 
-        self._untar(app_tarball_path, app_src_dir)
+        self._untar(self.app_tarball_path, app_src_dir)
         self._create_dockerfile_from_tpl(self.APP_SRC_DIR,
                                          self.dockerfile_tpl,
                                          dockerfile_path)
+        self._build_image(tmp_dir, self.image_id)
+        return self.image_id
 
-        self._build_image(tmp_dir, image_id)
-        _ = self.run_container(image_id, self.deployment_id)
-        return self.deployment_id
+    def deploy(self):
+        self.container_id = image_id
+        _ = self.run_container(self.image_id, self.container_id)
+        return self.container_id
 
     def _read_dockerfile_template(self, fname):
         tpl_path = os.path.join(self.script_dir, 'templates', fname)

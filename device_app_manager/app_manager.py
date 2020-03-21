@@ -21,6 +21,7 @@ import shlex
 import base64
 
 import redis
+import json
 
 from amqp_common import (
     ConnectionParameters,
@@ -29,7 +30,7 @@ from amqp_common import (
     RpcServer
 )
 
-from ._logging import create_logger
+from ._logging import create_logger, enable_debug, disable_debug
 from .deployments import *
 
 
@@ -78,8 +79,11 @@ class AppManagerProtocol(object):
 
 class AppManager(object):
     APP_STORAGE_DIR = '~/.apps'
-    APP_DEPLOY_RPC_NAME = 'thing.x.appmanager.deploy'
-    APP_KILL_RPC_NAME = 'thing.x.appmanager.kill'
+    APP_DEPLOY_RPC_NAME = 'thing.x.appmanager.deploy_app'
+    APP_DOWNLOAD_RPC_NAME = 'thing.x.appmanager.download_app'
+    APP_START_RPC_NAME = 'thing.x.appmanager.start_app'
+    APP_STOP_RPC_NAME = 'thing.x.appmanager.stop_app'
+    APP_LIST_RPC_NAME = 'thing.x.appmanager.apps'
     ISALIVE_RPC_NAME = 'thing.x.appmanager.is_alive'
     HEARTBEAT_TOPIC = 'thing.x.appmanager.heartbeat'
     THING_CONNECTED_EVENT = 'thing.x.appmanager.connected'
@@ -88,13 +92,20 @@ class AppManager(object):
     PLATFORM_HOST = '155.207.33.189'
     PLATFORM_VHOST = '/'
     HEARTBEAT_INTERVAL = 10  # seconds
+    REDIS_HOST = 'localhost'
+    REDIS_PORT = 6379
+    REDIS_DB = 0
+    REDIS_PASSWORD = ''
+    REDIS_APP_LIST_NAME = 'appmanager.apps'
 
     def __init__(self,
                  platform_creds=('guest', 'guest'),
                  heartbeat_interval=10,
                  debug=True,
                  app_deploy_rpc_name=None,
-                 app_kill_rpc_name=None,
+                 app_download_rpc_name=None,
+                 app_start_rpc_name=None,
+                 app_stop_rpc_name=None,
                  alive_rpc_name=None,
                  heartbeat_topic=None,
                  connected_event=None,
@@ -103,14 +114,14 @@ class AppManager(object):
                  platform_port=None,
                  platform_vhost=None
                  ):
+        atexit.register(self._cleanup)
+
         self.platform_creds = platform_creds
         self.heartbeat_interval = heartbeat_interval
-        self.debug = debug
-
         if app_deploy_rpc_name is not None:
             self.APP_DEPLOY_RPC_NAME = app_deploy_rpc_name
-        if app_kill_rpc_name is not None:
-            self.APP_KILL_RPC_NAME = app_kill_rpc_name
+        if app_stop_rpc_name is not None:
+            self.APP_STOP_RPC_NAME = app_stop_rpc_name
         if alive_rpc_name is not None:
             self.ISALIVE_RPC_NAME
         if heartbeat_topic is not None:
@@ -133,9 +144,31 @@ class AppManager(object):
         self.apps = {}
 
         self.__init_logger()
+        self.debug = debug
 
         self._create_app_storage_dir()
-        atexit.register(self._cleanup)
+
+        self._redis = redis.Redis(
+            host=self.REDIS_HOST,
+            port=self.REDIS_PORT,
+            db=self.REDIS_DB,
+            password=self.REDIS_PASSWORD,
+            decode_responses=True,
+            charset="utf-8"
+        )
+
+    @property
+    def debug(self):
+        return self._debug
+
+    @debug.setter
+    def debug(self, val):
+        if val:
+            enable_debug(self.log)
+            self._debug = True
+        else:
+            disable_debug(self.log)
+            self._debug = False
 
     def _init_platform_params(self):
         self.broker_conn_params = ConnectionParameters(
@@ -152,8 +185,8 @@ class AppManager(object):
         self._send_disconnected_event()
         if self._deploy_rpc:
             self._deploy_rpc.stop()
-        if self._kill_app_rpc:
-            self._kill_app_rpc.stop()
+        if self._stop_app_rpc:
+            self._stop_app_rpc.stop()
         for key in self.apps:
             self.apps[key].stop()
 
@@ -177,51 +210,87 @@ class AppManager(object):
 
     def _init_rpc_endpoints(self):
         self._deploy_rpc = None
-        self._kill_app_rpc = None
+        self._stop_app_rpc = None
         self._isalive_rpc = None
         self._init_app_deploy_rpc()
-        self._init_app_kill_rpc()
+        self._init_app_stop_rpc()
         self._init_isalive_rpc()
+        self._init_app_start_rpc()
+        self._init_app_download_rpc()
+        self._init_app_list_rpc()
 
     def _init_isalive_rpc(self):
-        rpc_name = self.ISALIVE_RPC_NAME.replace(
-                'x', self.platform_creds[0])
+        rpc_name = self.ISALIVE_RPC_NAME.replace('x', self.platform_creds[0])
 
         self._isalive_rpc = RpcServer(
-            rpc_name, on_request=self._isalive_rpc_callback,
-            connection_params=self.broker_conn_params, debug=self.debug)
+            rpc_name,
+            on_request=self._isalive_rpc_callback,
+            connection_params=self.broker_conn_params,
+            debug=self.debug)
 
         self._isalive_rpc.run_threaded()
-        self.log.debug(
-                '[*] - Initialized Is-Alive <{}>'.format(rpc_name))
+
+    def _init_app_list_rpc(self):
+        rpc_name = self.APP_LIST_RPC_NAME.replace('x', self.platform_creds[0])
+
+        self._app_list_rpc = RpcServer(
+            rpc_name,
+            on_request=self._app_list_rpc_callback,
+            connection_params=self.broker_conn_params,
+            debug=self.debug)
+
+        self._app_list_rpc.run_threaded()
 
     def _init_app_deploy_rpc(self):
         rpc_name = self.APP_DEPLOY_RPC_NAME.replace(
                 'x', self.platform_creds[0])
 
         self._deploy_rpc = RpcServer(
-            rpc_name, on_request=self._deploy_app_rpc_callback,
-            connection_params=self.broker_conn_params, debug=True)
+            rpc_name,
+            on_request=self._deploy_app_rpc_callback,
+            connection_params=self.broker_conn_params,
+            debug=self.debug)
 
         self._deploy_rpc.run_threaded()
-        self.log.debug(
-                '[*] - Initialized Deployment RPC <{}>'.format(rpc_name))
 
-    def _init_app_kill_rpc(self):
-        rpc_name = self.APP_KILL_RPC_NAME.replace(
+    def _init_app_stop_rpc(self):
+        rpc_name = self.APP_STOP_RPC_NAME.replace('x', self.platform_creds[0])
+        self._stop_rpc = RpcServer(
+            rpc_name,
+            on_request=self._stop_app_rpc_callback,
+            connection_params=self.broker_conn_params,
+            debug=self.debug)
+
+        self._stop_rpc.run_threaded()
+
+    def _init_app_download_rpc(self):
+        rpc_name = self.APP_DOWNLOAD_RPC_NAME.replace(
                 'x', self.platform_creds[0])
-        self._kill_app_rpc = RpcServer(
-            rpc_name, on_request=self._kill_app_rpc_callback,
-            connection_params=self.broker_conn_params, debug=True)
 
-        self._kill_app_rpc.run_threaded()
-        self.log.debug(
-                '[*] - Initialized Deployment RPC <{}>'.format(rpc_name))
+        self._download_rpc = RpcServer(
+            rpc_name,
+            on_request=self._download_app_rpc_callback,
+            connection_params=self.broker_conn_params,
+            debug=self.debug)
 
-    def _kill_app_rpc_callback(self, msg, meta):
+        self._download_rpc.run_threaded()
+
+    def _init_app_start_rpc(self):
+        rpc_name = self.APP_START_RPC_NAME.replace(
+                'x', self.platform_creds[0])
+
+        self._start_rpc = RpcServer(
+            rpc_name,
+            on_request=self._start_app_rpc_callback,
+            connection_params=self.broker_conn_params,
+            debug=self.debug)
+
+        self._start_rpc.run_threaded()
+
+    def _stop_app_rpc_callback(self, msg, meta):
         app_id = msg['app_id']
         try:
-            r = self.kill_app(app_id)
+            r = self.stop_app(app_id)
             return {
                 'status': 200,
                 'error': ''
@@ -249,7 +318,8 @@ class AppManager(object):
             tarball_path = self._store_app_tar(
                 tarball_b64, self.APP_STORAGE_DIR)
 
-            app_id = self.deploy_app(app_type, tarball_path)
+            app_deployment = self._build_app(app_name, app_type, tarball_path)
+            app_id = self._deploy_app(app_deployment)
             return {
                 'status': 200,
                 'app_id': app_id,
@@ -271,20 +341,53 @@ class AppManager(object):
             app_name = msg['app_name'] if 'app_name' in msg else ''
             tarball_b64 = app_file['data']
 
+            apps = self._redis.lrange(self.REDIS_APP_LIST_NAME, 0, -1)
+            exists = False
+            for app in apps:
+                app = json.loads(app)
+                if app['name'] == app_name:
+                    exists = True
+                    break
+
             tarball_path = self._store_app_tar(
                 tarball_b64, self.APP_STORAGE_DIR)
 
-            ## TODO: Store in db
+            app_deploy = self._get_app_object(
+                app_name, app_type, tarball_path)
+            self._build_app(app_deploy)
+            app_image = app_deploy.image_id
+
+            schema = {
+                'name': app_name,
+                'type': app_type,
+                'path': tarball_path,
+                'image': app_image
+            }
+
+            if exists:
+                llen = self._redis.llen(self.REDIS_APP_LIST_NAME)
+                for i in range(llen):
+                    app = self._redis.lindex(self.REDIS_APP_LIST_NAME, i)
+                    app = json.loads(app)
+                    if app['name'] == app_name:
+                        self.log.info('Updating app <{}>'.format(app_name))
+                        self._redis.lset(
+                            self.REDIS_APP_LIST_NAME, i, json.dumps(schema))
+                        break
+            else:
+                self._redis.lpush(
+                    self.REDIS_APP_LIST_NAME, json.dumps(schema))
+            ## Save db in hdd
+            self._redis.bgsave()
+
             return {
                 'status': 200,
-                'app_id': app_id,
                 'error': ''
             }
         except Exception as e:
             self.log.error(e, exc_info=True)
             return {
                 'status': 404,
-                'app_id': -1,
                 'error': str(e)
             }
 
@@ -293,18 +396,87 @@ class AppManager(object):
             # Optional. Empty app_name means unnamed app
             app_name = msg['app_name'] if 'app_name' in msg else ''
 
-            ## TODO: Not implemented!!
+            if not isinstance(app_name, str):
+                raise TypeError('Parameter app_name should be of type string')
+            elif app_name == '':
+                raise ValueError('Parameter app_name value is empty')
 
-            return {
+            apps = self._redis.lrange(self.REDIS_APP_LIST_NAME, 0, -1)
+            if len(apps) == 0:
+                raise ValueError(
+                    'Application with name <{}> not found in local storage'.format(
+                        app_name))
+            elif len(apps) > 1:
+                raise NotImplementedError(
+                    'Found more than 1 app with the same name in local storage')
+            for app in apps:
+                if app['name'] == app_name:
+                    app_deploy = self._get_app_object(
+                        app['name'], app['type'], app['path'])
+                    self._deploy_app(app_deploy)
+
+            resp =  {
                 'status': 200,
                 'error': ''
             }
+        except Exception as e:
+            self.log.error(e, exc_info=True)
+            resp =  {
+                'status': 404,
+                'error': str(e)
+            }
+        finally:
+            print(resp)
+            return resp
+
+    def _app_list_rpc_callback(self, msg, meta):
+        try:
+            apps = self._redis.lrange(self.REDIS_APP_LIST_NAME, 0, -1)
+            print(apps)
+            resp = {
+                'status': 200,
+                'stats': 200,
+                'apps': [json.loads(app)['name'] for app in apps],
+                'error': ''
+            }
+            self.log.info(resp)
+            return resp
         except Exception as e:
             self.log.error(e, exc_info=True)
             return {
                 'status': 404,
                 'error': str(e)
             }
+
+    def _get_app_object(self, app_name, app_type, app_tar_path):
+        # Add here more deployment options.
+        # TODO: The way deployment definition works much change to module-based.
+        # Generalize the way so that it is easier to maintain extentions.
+        if app_type == 'py3':
+            app_deployment = AppDeploymentPython3(
+                self.broker_conn_params,
+                app_name,
+                app_type,
+                app_tar_path)
+        elif app_type == 'r4a_ros2_py':
+            app_deployment = AppDeploymentR4AROS2Py(
+                self.broker_conn_params,
+                app_name,
+                app_type,
+                app_tar_path)
+        else:
+            raise TypeError(
+                'Application type <{}> not supported'.format(app_type))
+        return app_deployment
+
+    def _build_app(self, app_deployment):
+        image_id = app_deployment.build()
+        return image_id
+
+    def _deploy_app(self, app_deployment):
+        app_id = app_deployment.deploy()
+        self.apps[app_id] = app_deployment
+        return app_id
 
     def _send_connected_event(self):
         p = PublisherSync(
@@ -343,23 +515,7 @@ class AppManager(object):
             self.log.error(exc, exc_info=True)
             self._cleanup()
 
-    def deploy_app(self, app_type, app_tarball):
-        # Add here more deployment options.
-        # TODO: The way deployment definition works much change to module-based.
-        # Generalize the way so that it is easier to maintain extentions.
-        if app_type == 'py3':
-            app_deployment = AppDeploymentPython3(self.broker_conn_params,
-                                                  app_tarball)
-        elif app_type == 'r4a_ros2_py':
-            app_deployment = AppDeploymentR4AROS2Py(
-                self.broker_conn_params, app_tarball)
-        else:
-            raise TypeError('Application type <{}> not supported'.format(app_type))
-        app_id = app_deployment.start()
-        self.apps[app_id] = app_deployment
-        return app_id
-
-    def kill_app(self, app_id):
+    def stop_app(self, app_id):
         if app_id not in self.apps:
             self.log.error('App does not exist: {}'.format(app_id))
             raise TypeError('Application with id={} does not exist'.format(

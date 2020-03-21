@@ -25,6 +25,11 @@ def load_cfg(cfg_file=None):
     config = configparser.ConfigParser()
     config.read(cfg_file)
     try:
+        debug = config.get('core', 'debug')
+        debug = True if debug == 1 else False
+    except configparser.NoOptionError:
+        debug = False
+    try:
         username = config.get('platform', 'username')
     except configparser.NoOptionError:
         username = 'bot'
@@ -55,11 +60,19 @@ def load_cfg(cfg_file=None):
     try:
         app_deploy_rpc_name = config.get('core', 'app_deploy_rpc_name')
     except configparser.NoOptionError:
-        app_deploy_rpc_name = 'thing.x.appmanager.deploy'
+        app_deploy_rpc_name = 'thing.x.appmanager.deploy_app'
     try:
-        app_kill_rpc_name = config.get('core', 'app_kill_rpc_name')
+        app_download_rpc_name = config.get('core', 'app_download_rpc_name')
     except configparser.NoOptionError:
-        app_kill_rpc_name = 'thing.x.appmanager.kill'
+        app_download_rpc_name = 'thing.x.appmanager.download_app'
+    try:
+        app_start_rpc_name = config.get('core', 'app_start_rpc_name')
+    except configparser.NoOptionError:
+        app_start_rpc_name = 'thing.x.appmanager.start_app'
+    try:
+        app_stop_rpc_name = config.get('core', 'app_stop_rpc_name')
+    except configparser.NoOptionError:
+        app_stop_rpc_name = 'thing.x.appmanager.stop_app'
     try:
         alive_rpc_name = config.get('core', 'alive_rpc_name')
     except configparser.NoOptionError:
@@ -74,6 +87,7 @@ def load_cfg(cfg_file=None):
         disconnected_event = 'thing.x.appmanager.disconnected'
 
     return {
+        'debug': debug,
         'username': username,
         'password': password,
         'host': host,
@@ -82,7 +96,9 @@ def load_cfg(cfg_file=None):
         'heartbeat_interval': int(heartbeat_interval),
         'heartbeat_topic': heartbeat_topic,
         'app_deploy_rpc_name': app_deploy_rpc_name,
-        'app_kill_rpc_name': app_kill_rpc_name,
+        'app_download_rpc_name': app_download_rpc_name,
+        'app_start_rpc_name': app_start_rpc_name,
+        'app_stop_rpc_name': app_stop_rpc_name,
         'alive_rpc_name': alive_rpc_name,
         'connected_event': connected_event,
         'disconnected_event': disconnected_event
@@ -147,12 +163,6 @@ def main():
         config['vhost'] = vhost
     if heartbeat is not None:
         config['heartbeat_interval'] = heartbeat_interval
-    if debug:
-        debug = True
-    else:
-        debug = False
-
-    print(config)
 
     manager = AppManager(
         platform_creds=(config['username'], config['password']),
@@ -162,11 +172,13 @@ def main():
         heartbeat_interval=config['heartbeat_interval'],
         heartbeat_topic=config['heartbeat_topic'],
         app_deploy_rpc_name=config['app_deploy_rpc_name'],
-        app_kill_rpc_name=config['app_kill_rpc_name'],
+        app_download_rpc_name=config['app_download_rpc_name'],
+        app_start_rpc_name=config['app_start_rpc_name'],
+        app_stop_rpc_name=config['app_stop_rpc_name'],
         alive_rpc_name=config['alive_rpc_name'],
         connected_event=config['connected_event'],
         disconnected_event=config['disconnected_event'],
-        debug=debug
+        debug=config['debug']
 
     )
     manager.run()
