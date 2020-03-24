@@ -187,8 +187,15 @@ class AppManager(object):
             self._deploy_rpc.stop()
         if self._stop_app_rpc:
             self._stop_app_rpc.stop()
-        for key in self.apps:
-            self.apps[key].stop()
+
+        apps = self._redis_get_app_list()
+        apps = [json.loads(app) for app in apps]
+        app_idx = 0
+        for app in apps:
+            app['state'] = 0
+            app['container']['name'] = ''
+            app['container']['id'] = ''
+            self._redis.lset(self.REDIS_APP_LIST_NAME, app_idx, json.dumps(app))
 
     def _create_app_storage_dir(self):
         if not os.path.exists(self.APP_STORAGE_DIR):
@@ -287,21 +294,6 @@ class AppManager(object):
 
         self._start_rpc.run_threaded()
 
-    def _stop_app_rpc_callback(self, msg, meta):
-        app_id = msg['app_id']
-        try:
-            r = self.stop_app(app_id)
-            return {
-                'status': 200,
-                'error': ''
-            }
-        except Exception as e:
-            self.log.error(e, exc_info=True)
-            return {
-                'status': 404,
-                'error': str(e)
-            }
-
     def _isalive_rpc_callback(self, msg, meta):
         return {
             'status': 200
@@ -341,13 +333,7 @@ class AppManager(object):
             app_name = msg['app_name'] if 'app_name' in msg else ''
             tarball_b64 = app_file['data']
 
-            apps = self._redis.lrange(self.REDIS_APP_LIST_NAME, 0, -1)
-            exists = False
-            for app in apps:
-                app = json.loads(app)
-                if app['name'] == app_name:
-                    exists = True
-                    break
+            apps = self._redis_get_app_list()
 
             tarball_path = self._store_app_tar(
                 tarball_b64, self.APP_STORAGE_DIR)
@@ -357,26 +343,61 @@ class AppManager(object):
             self._build_app(app_deploy)
             app_image = app_deploy.image_id
 
-            schema = {
-                'name': app_name,
-                'type': app_type,
-                'path': tarball_path,
-                'image': app_image
+            app, app_index = self._check_app_exists(app_name, apps)
+            if app_index != -1:
+                # Update
+                app['type'] = app_type
+                app['path'] = tarball_path
+                app['image'] = app_image
+                self.log.info('Updating app <{}>'.format(app_name))
+                self._redis.lset(
+                    self.REDIS_APP_LIST_NAME, app_index, json.dumps(app))
+            else:
+                # Create
+                app = {
+                    'name': app_name,
+                    'type': app_type,
+                    'path': tarball_path,
+                    'image': app_image,
+                    'container': {
+                        'name': '',
+                        'id': ''
+                    },
+                    'state': 0,
+                }
+
+                self._redis.lpush(
+                    self.REDIS_APP_LIST_NAME, json.dumps(app))
+            ## Save db in hdd
+            self._redis.bgsave()
+
+            return {
+                'status': 200,
+                'error': ''
+            }
+        except Exception as e:
+            self.log.error(e, exc_info=True)
+            return {
+                'status': 404,
+                'error': str(e)
             }
 
-            if exists:
-                llen = self._redis.llen(self.REDIS_APP_LIST_NAME)
-                for i in range(llen):
-                    app = self._redis.lindex(self.REDIS_APP_LIST_NAME, i)
-                    app = json.loads(app)
-                    if app['name'] == app_name:
-                        self.log.info('Updating app <{}>'.format(app_name))
-                        self._redis.lset(
-                            self.REDIS_APP_LIST_NAME, i, json.dumps(schema))
-                        break
-            else:
-                self._redis.lpush(
-                    self.REDIS_APP_LIST_NAME, json.dumps(schema))
+    def _delete_app_rpc_callback(self, msg, meta):
+        try:
+            # Optional. Empty app_name means unnamed app
+            if not 'app_name' in msg:
+                raise ValueError('Message schema error. app_name is not defined')
+            app_name = msg['app_name']
+
+            apps = self._redis_get_app_list()
+
+            app, app_index = self._check_app_exists(app_name, apps)
+            if app_index == -1:
+                raise ValueError('Application does not exist')
+
+            self.log.info('Deleting Application <{}>'.format(app_name))
+            self._redis.lrem(self.REDIS_APP_LIST_NAME, 1, app_index)
+
             ## Save db in hdd
             self._redis.bgsave()
 
@@ -401,7 +422,7 @@ class AppManager(object):
             elif app_name == '':
                 raise ValueError('Parameter app_name value is empty')
 
-            apps = self._redis.lrange(self.REDIS_APP_LIST_NAME, 0, -1)
+            apps = self._redis_get_app_list()
             if len(apps) == 0:
                 raise ValueError(
                     'Application with name <{}> not found in local storage'.format(
@@ -409,14 +430,28 @@ class AppManager(object):
             elif len(apps) > 1:
                 raise NotImplementedError(
                     'Found more than 1 app with the same name in local storage')
-            for app in apps:
-                if app['name'] == app_name:
-                    app_deploy = self._get_app_object(
-                        app['name'], app['type'], app['path'])
-                    self._deploy_app(app_deploy)
+            app, app_index = self._check_app_exists(app_name, apps)
+            if app_index == -1:
+                raise ValueError('Application does not exist')
+            ## Deploy application
+            app_deploy = self._get_app_object(
+                app['name'], app['type'], app['path'])
+
+            container_name, container_id = self._deploy_app(app_deploy)
+
+            app['container'] = {
+                'name': container_name,
+                'id': container_id
+            }
+            app['state'] = 1
+            self._redis.lset(self.REDIS_APP_LIST_NAME, app_index, json.dumps(app))
+
+            ## Save db in hdd
+            self._redis.bgsave()
 
             resp =  {
                 'status': 200,
+                'app_id': app_name,
                 'error': ''
             }
         except Exception as e:
@@ -429,17 +464,33 @@ class AppManager(object):
             print(resp)
             return resp
 
+    def _redis_get_app_list(self):
+        apps = self._redis.lrange(self.REDIS_APP_LIST_NAME, 0, -1)
+        return apps
+
+    def _check_app_exists(self, app_name, apps):
+        app_index = -1
+        index = 0
+        app = {}
+        for _app in apps:
+            _app = json.loads(_app)
+            if _app['name'] == app_name:
+                app = _app
+                app_index = index
+
+            index += 1
+        resp = (app, app_index)
+        return resp
+
     def _app_list_rpc_callback(self, msg, meta):
         try:
             apps = self._redis.lrange(self.REDIS_APP_LIST_NAME, 0, -1)
-            print(apps)
             resp = {
                 'status': 200,
                 'stats': 200,
-                'apps': [json.loads(app)['name'] for app in apps],
+                'apps': [json.loads(app) for app in apps],
                 'error': ''
             }
-            self.log.info(resp)
             return resp
         except Exception as e:
             self.log.error(e, exc_info=True)
@@ -474,9 +525,9 @@ class AppManager(object):
         return image_id
 
     def _deploy_app(self, app_deployment):
-        app_id = app_deployment.deploy()
+        app_id, container_id = app_deployment.deploy()
         self.apps[app_id] = app_deployment
-        return app_id
+        return app_id, container_id
 
     def _send_connected_event(self):
         p = PublisherSync(
@@ -515,18 +566,61 @@ class AppManager(object):
             self.log.error(exc, exc_info=True)
             self._cleanup()
 
-    def stop_app(self, app_id):
-        if app_id not in self.apps:
-            self.log.error('App does not exist: {}'.format(app_id))
-            raise TypeError('Application with id={} does not exist'.format(
-                app_id))
-        app = self.apps[app_id]
-        app.stop()
-        del self.apps[app_id]
-        self.log.info('App {} killed!'.format(app_id))
-        return {
-            'status': 200
-        }
+    def _stop_app_rpc_callback(self, msg, meta):
+        app_name = msg['app_id']
+        try:
+            apps = self._redis_get_app_list()
+            if len(apps) == 0:
+                raise ValueError(
+                    'Application with name <{}> not found in local storage'.format(
+                        app_name))
+            elif len(apps) > 1:
+                raise NotImplementedError(
+                    'Found more than 1 app with the same name in local storage')
+            app, app_index = self._check_app_exists(app_name, apps)
+            if app_index == -1:
+                raise ValueError('Application does not exist')
+
+            if app['state'] == 0:
+                raise ValueError('Application is not running')
+
+            app_deploy = self._get_app_object(
+                app['name'], app['type'], app['path'])
+            app_deploy.container_name = app['container']['id']
+            app_deploy.stop()
+
+            # Update Redis
+            app['container'] = ''
+            app['state'] = 0
+            self._redis.lset(self.REDIS_APP_LIST_NAME, app_index, json.dumps(app))
+
+            ## Save db in hdd
+            self._redis.bgsave()
+
+            self.log.info('App {} stopped!'.format(app_name))
+            return {
+                'status': 200,
+                'skata': 1
+            }
+        except Exception as e:
+            self.log.error(e, exc_info=True)
+            return {
+                'status': 404,
+                'error': str(e)
+            }
+
+    def _redis_set_app_state(self, app_name, state):
+        app = self._redis_get_app(app_name)
+        app['state'] = state
+        self._redis.lset(self.REDIS_APP_LIST_NAME, app_index, json.dumps(app))
+
+    def _redis_get_app(self, app_name):
+            apps = self._redis_get_app_list()
+            app, app_index = self._check_app_exists(app_name, apps)
+
+            if app_index == -1:
+                return None
+            return app
 
     def _store_app_tar(self, tar_b64, dest_dir):
         tarball_decoded = base64.b64decode(tar_b64)

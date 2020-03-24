@@ -9,14 +9,6 @@ import argparse
 import amqp_common
 
 
-class AppDeployMessage(amqp_common.Message):
-    __slots__ = ['header', 'app_tarball', 'app_type']
-
-    def __init__(self, app_tarball_fmsg, app_type):
-        self.header = amqp_common.HeaderMessage()
-        self.app_tarball = app_tarball_fmsg
-        self.app_type = app_type
-
 
 class AppKillMessage(amqp_common.Message):
     __slots__ = ['header', 'app_id']
@@ -36,7 +28,7 @@ if __name__ == "__main__":
         type=str, default='')
     parser.add_argument(
         '--rpc-name', dest='rpc_name', help='The URI of the RPC endpoint',
-        type=str, default='thing.{}.appmanager.kill')
+        type=str, default='thing.{}.appmanager.stop_app')
     parser.add_argument(
         '--host',
         dest='host',

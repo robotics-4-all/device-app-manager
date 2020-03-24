@@ -76,6 +76,9 @@ class AppDeployment(object):
         self.image_id = 'app-{}'.format(self.app_name)
         self.container_id = None
 
+        self.app_stats_thread = None
+        self.app_log_thread = None
+
         # Instantiate a docker client
         # self.docker_client = docker.APIClient(base_url=self.DOCKER_DAEMONN_URL)
         self.docker_client = docker.from_env()
@@ -209,7 +212,7 @@ class AppDeployment(object):
     ):
         container = self.docker_client.containers.run(
             image_id,
-            name=image_id,
+            name=deployment_id,
             detach=detach,
             # auto_remove=True,
             # network='host',
@@ -219,11 +222,9 @@ class AppDeployment(object):
             # publish_all_ports=True,
             # remove=True
         )
-        print(container)
         self.log.debug('[*] - Container created!')
         self.container = container
         self.container_id = container.id
-
 
         if self.remote_logging:
             self.detach_app_logging(deployment_id)
@@ -252,7 +253,6 @@ class AppDeployment(object):
             'stop_event': t_stop_event
         }
 
-
     def build(self):
         tmp_dir = os.path.join(self.TMP_DIR,
                                self.app_name)
@@ -272,9 +272,9 @@ class AppDeployment(object):
         return self.image_id
 
     def deploy(self):
-        self.container_id = image_id
-        _ = self.run_container(self.image_id, self.container_id)
-        return self.container_id
+        self.container_name = self.image_id
+        _ = self.run_container(self.image_id, self.container_name)
+        return self.container_name, self.container_id
 
     def _read_dockerfile_template(self, fname):
         tpl_path = os.path.join(self.script_dir, 'templates', fname)
@@ -289,30 +289,27 @@ class AppDeployment(object):
         if not self.docker_client:
             return
         try:
-            self.log.debug('Killing container: {}'.format(self.container.id))
-            self.container.kill()
+            self.log.debug('Killing container: {}'.format(self.container_name))
+            c = self.docker_client.containers.get(self.container_name)
+            c.remove(force=True)
+            if self.app_stats_thread:
+                self.app_stats_thread['stop_event'].set()
+            if self.app_log_thread:
+                self.app_log_thread['stop_event'].set()
         except docker.errors.NotFound as e:
             self.log.debug(
-                'Could not kill container <{}>'.format(self.container.id))
-        try:
-            self.log.debug('Removing container: {}'.format(self.container.id))
-            self.container.remove(force=True)
-        except docker.errors.NotFound as e:
-            self.log.debug(
-                'Could not remove container <{}>'.format(self.container.id))
-        try:
-            self.log.debug('Removing image: {}'.format(self.image.id.split(':')[1]))
-            self.docker_client.images.remove(self.image.id.split(':')[1])
-        except docker.errors.NotFound as e:
-            self.log.debug('Could not remove image <{}>'.format(self.image.id))
-        try:
-            self.app_stats_thread['stop_event'].set()
-        except Exception as e:
-            pass
-        try:
-            self.app_log_thread['stop_event'].set()
-        except Exception as e:
-            pass
+                'Could not kill container <{}>'.format(self.container_name))
+        # try:
+        #     self.log.debug('Removing container: {}'.format(self.container.id))
+        #     self.container.remove(force=True)
+        # except docker.errors.NotFound as e:
+        #     self.log.debug(
+        #         'Could not remove container <{}>'.format(self.container.id))
+        # try:
+        #     self.log.debug('Removing image: {}'.format(self.image.id.split(':')[1]))
+        #     self.docker_client.images.remove(self.image.id.split(':')[1])
+        # except docker.errors.NotFound as e:
+        #     self.log.debug('Could not remove image <{}>'.format(self.image.id))
 
 
 class AppDeploymentPython3(AppDeployment):
