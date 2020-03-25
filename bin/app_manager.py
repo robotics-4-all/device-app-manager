@@ -50,7 +50,7 @@ def load_cfg(cfg_file=None):
     except configparser.NoOptionError:
         vhost = '/'
     try:
-        heartbeat_topic = config.get('core', 'heartbeat_topic')
+        heartbeat_topic = config.get('services', 'heartbeat_topic')
     except configparser.NoOptionError:
         heartbeat_topic = 'thing.x.appmanager.hearbeat'
     try:
@@ -58,33 +58,57 @@ def load_cfg(cfg_file=None):
     except configparser.NoOptionError:
         heartbeat_interval = 10  # seconds
     try:
-        app_deploy_rpc_name = config.get('core', 'app_deploy_rpc_name')
+        app_list_rpc_name = config.get('services', 'app_list_rpc_name')
     except configparser.NoOptionError:
-        app_deploy_rpc_name = 'thing.x.appmanager.deploy_app'
+        app_list_rpc_name = 'thing.x.appmanager.apps'
     try:
-        app_download_rpc_name = config.get('core', 'app_download_rpc_name')
+        app_delete_rpc_name = config.get('services', 'app_delete_rpc_name')
+    except configparser.NoOptionError:
+        app_delete_rpc_name = 'thing.x.appmanager.delete_app'
+    try:
+        app_download_rpc_name = config.get('services', 'app_download_rpc_name')
     except configparser.NoOptionError:
         app_download_rpc_name = 'thing.x.appmanager.download_app'
     try:
-        app_start_rpc_name = config.get('core', 'app_start_rpc_name')
+        app_start_rpc_name = config.get('services', 'app_start_rpc_name')
     except configparser.NoOptionError:
         app_start_rpc_name = 'thing.x.appmanager.start_app'
     try:
-        app_stop_rpc_name = config.get('core', 'app_stop_rpc_name')
+        app_stop_rpc_name = config.get('services', 'app_stop_rpc_name')
     except configparser.NoOptionError:
         app_stop_rpc_name = 'thing.x.appmanager.stop_app'
     try:
-        alive_rpc_name = config.get('core', 'alive_rpc_name')
+        alive_rpc_name = config.get('services', 'alive_rpc_name')
     except configparser.NoOptionError:
         alive_rpc_name = 'thing.x.appmanager.is_alive'
     try:
-        connected_event = config.get('core', 'connected_event')
+        connected_event = config.get('services', 'connected_event')
     except configparser.NoOptionError:
         connected_event = 'thing.x.appmanager.connected'
     try:
-        disconnected_event = config.get('core', 'disconnected_event')
+        disconnected_event = config.get('services', 'disconnected_event')
     except configparser.NoOptionError:
         disconnected_event = 'thing.x.appmanager.disconnected'
+    try:
+        redis_host = config.get('redis', 'host')
+    except configparser.NoOptionError:
+        redis_host = 'localhost'
+    try:
+        redis_port = config.get('redis', 'port')
+    except configparser.NoOptionError:
+        redis_port = 6379
+    try:
+        redis_db = config.get('redis', 'database')
+    except configparser.NoOptionError:
+        redis_db = 0
+    try:
+        redis_password = config.get('redis', 'password')
+    except configparser.NoOptionError:
+        redis_password = ''
+    try:
+        redis_app_list_name = config.get('redis', 'app_list_name')
+    except configparser.NoOptionError:
+        redis_app_list_name = 'appmanager.apps'
 
     return {
         'debug': debug,
@@ -95,13 +119,19 @@ def load_cfg(cfg_file=None):
         'vhost': vhost,
         'heartbeat_interval': int(heartbeat_interval),
         'heartbeat_topic': heartbeat_topic,
-        'app_deploy_rpc_name': app_deploy_rpc_name,
+        'app_delete_rpc_name': app_delete_rpc_name,
+        'app_list_rpc_name': app_list_rpc_name,
         'app_download_rpc_name': app_download_rpc_name,
         'app_start_rpc_name': app_start_rpc_name,
         'app_stop_rpc_name': app_stop_rpc_name,
         'alive_rpc_name': alive_rpc_name,
         'connected_event': connected_event,
-        'disconnected_event': disconnected_event
+        'disconnected_event': disconnected_event,
+        'redis_host': redis_host,
+        'redis_port': redis_port,
+        'redis_db': redis_db,
+        'redis_password': redis_password,
+        'redis_app_list_name': redis_app_list_name
     }
 
 
@@ -171,13 +201,19 @@ def main():
         platform_vhost=config['vhost'],
         heartbeat_interval=config['heartbeat_interval'],
         heartbeat_topic=config['heartbeat_topic'],
-        app_deploy_rpc_name=config['app_deploy_rpc_name'],
+        app_list_rpc_name=config['app_list_rpc_name'],
+        app_delete_rpc_name=config['app_delete_rpc_name'],
         app_download_rpc_name=config['app_download_rpc_name'],
         app_start_rpc_name=config['app_start_rpc_name'],
         app_stop_rpc_name=config['app_stop_rpc_name'],
         alive_rpc_name=config['alive_rpc_name'],
         connected_event=config['connected_event'],
         disconnected_event=config['disconnected_event'],
+        redis_host=config['redis_host'],
+        redis_port=config['redis_port'],
+        redis_db=config['redis_db'],
+        redis_password=config['redis_password'],
+        redis_app_list_name=config['redis_app_list_name'],
         debug=config['debug']
 
     )

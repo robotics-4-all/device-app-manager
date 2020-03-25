@@ -15,10 +15,10 @@ import amqp_common
 
 
 class AppStartMessage(amqp_common.Message):
-    __slots__ = ['app_name']
+    __slots__ = ['app_id']
 
-    def __init__(self, app_name):
-        self.app_name = app_name
+    def __init__(self, app_id):
+        self.app_id = app_id
 
 
 if __name__ == "__main__":
@@ -27,7 +27,7 @@ if __name__ == "__main__":
         '--device-id', dest='device_id', help='UID of the device',
         type=str, default='')
     parser.add_argument(
-        '--app-name', dest='app_name', help='Application Name',
+        '--app-id', dest='app_id', help='Application ID/Name',
         type=str, default='')
     parser.add_argument(
         '--rpc-name', dest='rpc_name', help='The URI of the RPC endpoint',
@@ -72,7 +72,7 @@ if __name__ == "__main__":
     username = args.username
     password = args.password
     device_id = args.device_id
-    app_name = args.app_name
+    app_id = args.app_id
     rpc_name = args.rpc_name
     debug = True if args.debug else False
 
@@ -82,7 +82,7 @@ if __name__ == "__main__":
 
     rpc_name = rpc_name.format(device_id)
     rpc_client = amqp_common.RpcClient(rpc_name, connection_params=conn_params)
-    msg = AppStartMessage(app_name)
+    msg = AppStartMessage(app_id)
 
     rpc_client.debug = True
     resp = rpc_client.call(msg.serialize_json(), timeout=30)

@@ -15,10 +15,10 @@ import amqp_common
 
 
 class AppDownloadMessage(amqp_common.Message):
-    __slots__ = ['app_name', 'app_tarball', 'app_type']
+    __slots__ = ['app_id', 'app_tarball', 'app_type']
 
     def __init__(self, app_name, app_type, app_tarball_fmsg):
-        self.app_name = app_name
+        self.app_id = app_id
         self.app_tarball = app_tarball_fmsg
         self.app_type = app_type
 
@@ -32,7 +32,7 @@ if __name__ == "__main__":
         '--device-id', dest='device_id', help='UID of the device',
         type=str, default='')
     parser.add_argument(
-        '--app-name', dest='app_name', help='Application Name',
+        '--app-id', dest='app_id', help='Application ID/Name',
         type=str, default='')
     parser.add_argument(
         '--app-type', dest='app_type', help='Application Type',
@@ -82,7 +82,7 @@ if __name__ == "__main__":
     device_id = args.device_id
     fpath = args.fpath
     app_type = args.app_type
-    app_name = args.app_name
+    app_id = args.app_id
     rpc_name = args.rpc_name
     debug = True if args.debug else False
 
@@ -94,7 +94,7 @@ if __name__ == "__main__":
     rpc_client = amqp_common.RpcClient(rpc_name, connection_params=conn_params)
     fmsg = amqp_common.FileMessage()
     fmsg.load_from_file(fpath)
-    msg = AppDownloadMessage(app_name, app_type, fmsg)
+    msg = AppDownloadMessage(app_id, app_type, fmsg)
 
     rpc_client.debug = True
     resp = rpc_client.call(msg.serialize_json(), timeout=30)

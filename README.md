@@ -101,8 +101,7 @@ Usage example:
     --port 5782 \
     --vhost / \
     --debug \
-    --fpath py3_app.tar.gz \
-    --app-type py3
+    --app-id test-app
 ```
 
 ### Stop Application Example
@@ -114,7 +113,7 @@ Usage example:
 
 ```bash
 /stop_app.py \
-    --app-id f6d5fdf5 \
+    --app-id test-app \
     --device-id device2 \
     --host 155.207.33.189 \
     --port 5782 \
@@ -128,16 +127,26 @@ Usage example:
 
 All RPC Endpoints are binded to the `DEFAULT` exchange by default.
 
-- Deploy Application:
-  - URI: `thing.{thing_id}.appmanager.deploy`
+- Download Application:
+  - URI: `thing.{thing_id}.appmanager.download_app`
   - DataModel:
-    - In: `{"app_type": <py3/tek_ros2_py>, "app_tarball": <BASE64_ENCODED_TARBALL>}`
-    - Out: `{"status": <200/404>, "app_id": <unique_app_id>}`
-- Kill Application:
-  - URI: `thing.{thing_id}.appmanager.kill`
+    - In: `{"app_id": "<application_unique_id>", "app_type": <py3/r4a_ros2_py>, "app_tarball": <BASE64_ENCODED_TARBALL>}`
+    - Out: `{"status": <200/404>, "app_id": <application_unique_id>, "error": "<error_message>"}`
+- Start Application:
+  - URI: `thing.{thing_id}.appmanager.start_app`
   - DataModel:
-    - In: `{"app_id": <unique_app_id>}`
-    - Out: `{"status": <200/404>}`
+    - In: `{"app_id": <application_unique_id>}`
+    - Out: `{"status": <200/404>, "app_id": <unique_app_id>, "error": "<error_message>"}`
+- Stop Application:
+  - URI: `thing.{thing_id}.appmanager.stop_app`
+  - DataModel:
+    - In: `{"app_id": <application_unique_id>}`
+    - Out: `{"status": <200/404>, "error": "<error_message>"}`
+- Delete Application:
+  - URI: `thing.{thing_id}.appmanager.delete_app`
+  - DataModel:
+    - In: `{"app_id": <application_unique_id>}`
+    - Out: `{"status": <200/404>, "error": "<error_message>"}`
 - Is Alive:
   - URI: `thing.{thing_id}.appmanager.is_alive`
   - DataModel:

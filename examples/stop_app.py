@@ -24,7 +24,7 @@ if __name__ == "__main__":
         '--device-id', dest='device_id', help='UID of the device',
         type=str, default='')
     parser.add_argument(
-        '--app-id', dest='app_id', help='Type of Application',
+        '--app-id', dest='app_id', help='Application name',
         type=str, default='')
     parser.add_argument(
         '--rpc-name', dest='rpc_name', help='The URI of the RPC endpoint',
@@ -79,7 +79,7 @@ if __name__ == "__main__":
     conn = amqp_common.SharedConnection(conn_params)
 
     if app_id == '':
-        print('[*] - Missing app-id argument!')
+        print('[*] - Missing --app-id argument!')
         sys.exit(1)
     rpc_name = rpc_name.format(device_id)
     rpc_client = amqp_common.RpcClient(rpc_name, connection=conn)
