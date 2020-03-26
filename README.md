@@ -127,11 +127,30 @@ Usage example:
 
 All RPC Endpoints are binded to the `DEFAULT` exchange by default.
 
-- Download Application:
-  - URI: `thing.{thing_id}.appmanager.download_app`
-  - DataModel:
-    - In: `{"app_id": "<application_unique_id>", "app_type": <py3/r4a_ros2_py>, "app_tarball": <BASE64_ENCODED_TARBALL>}`
-    - Out: `{"status": <200/404>, "app_id": <application_unique_id>, "error": "<error_message>"}`
+#### Download Application Service
+
+A service call will download and install the input app.
+
+**URI**: `thing.{thing_id}.appmanager.download_app`
+
+**DataModel**:
+  - Input:
+```
+{
+  "app_id": "<application_unique_id>",
+  "app_type": <py3/r4a_ros2_py>,
+  "app_tarball": <BASE64_ENCODED_TARBALL>
+}
+```
+  - Output: 
+
+```
+{
+  "status": <200/404>,
+  "app_id": <application_unique_id>,
+  "error": "<error_message>"
+}
+```
 - Start Application:
   - URI: `thing.{thing_id}.appmanager.start_app`
   - DataModel:
