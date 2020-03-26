@@ -505,61 +505,20 @@ class AppManager(object):
                 'error': str(e)
             }
 
-    def _redis_get_app_list(self):
-        apps = self._redis.lrange(self.REDIS_APP_LIST_NAME, 0, -1)
-        return apps
-
-    def _check_app_exists(self, app_name, apps):
-        app_index = -1
-        index = 0
-        app = {}
-        for _app in apps:
-            _app = json.loads(_app)
-            if _app['name'] == app_name:
-                app = _app
-                app_index = index
-
-            index += 1
-        resp = (app, app_index)
-        return resp
-
     def _app_list_rpc_callback(self, msg, meta):
+        resp = {
+            'status': 200,
+            'apps': []
+            'error': ''
+        }
         try:
             apps = self._redis.lrange(self.REDIS_APP_LIST_NAME, 0, -1)
-            resp = {
-                'status': 200,
-                'stats': 200,
-                'apps': [json.loads(app) for app in apps],
-                'error': ''
-            }
+            resp['apps'] = [json.loads(app) for app in apps],
             return resp
         except Exception as e:
             self.log.error(e, exc_info=True)
-            return {
-                'status': 404,
-                'error': str(e)
-            }
-
-    def _get_app_object(self, app_name, app_type, app_tar_path):
-        # Add here more deployment options.
-        # TODO: The way deployment definition works much change to module-based.
-        # Generalize the way so that it is easier to maintain extentions.
-        if app_type == 'py3':
-            app_deployment = AppDeploymentPython3(
-                self.broker_conn_params,
-                app_name,
-                app_type,
-                app_tar_path)
-        elif app_type == 'r4a_ros2_py':
-            app_deployment = AppDeploymentR4AROS2Py(
-                self.broker_conn_params,
-                app_name,
-                app_type,
-                app_tar_path)
-        else:
-            raise TypeError(
-                'Application type <{}> not supported'.format(app_type))
-        return app_deployment
+            resp['error'] = str(e)
+            return resp
 
     def _build_app(self, app_deployment):
         image_id = app_deployment.build()
@@ -592,6 +551,68 @@ class AppManager(object):
         p.close()
         del p
 
+    def _get_app_object(self, app_name, app_type, app_tar_path):
+        # Add here more deployment options.
+        # TODO: The way deployment definition works much change to module-based.
+        # Generalize the way so that it is easier to maintain extentions.
+        if app_type == 'py3':
+            app_deployment = AppDeploymentPython3(
+                self.broker_conn_params,
+                app_name,
+                app_type,
+                app_tar_path)
+        elif app_type == 'r4a_ros2_py':
+            app_deployment = AppDeploymentR4AROS2Py(
+                self.broker_conn_params,
+                app_name,
+                app_type,
+                app_tar_path)
+        else:
+            raise TypeError(
+                'Application type <{}> not supported'.format(app_type))
+        return app_deployment
+
+    def _check_app_exists(self, app_name, apps):
+        app_index = -1
+        index = 0
+        app = {}
+        for _app in apps:
+            _app = json.loads(_app)
+            if _app['name'] == app_name:
+                app = _app
+                app_index = index
+
+            index += 1
+        resp = (app, app_index)
+        return resp
+
+    def _redis_set_app_state(self, app_name, state):
+        app = self._redis_get_app(app_name)
+        app['state'] = state
+        self._redis.lset(self.REDIS_APP_LIST_NAME, app_index, json.dumps(app))
+
+    def _redis_get_app(self, app_name):
+            apps = self._redis_get_app_list()
+            app, app_index = self._check_app_exists(app_name, apps)
+
+            if app_index == -1:
+                return None
+            return app
+
+    def _redis_get_app_list(self):
+        apps = self._redis.lrange(self.REDIS_APP_LIST_NAME, 0, -1)
+        return apps
+
+    def _store_app_tar(self, tar_b64, dest_dir):
+        tarball_decoded = base64.b64decode(tar_b64)
+        u_id = uuid.uuid4().hex[0:8]
+        tarball_path = os.path.join(
+            self.APP_STORAGE_DIR,
+            'app-{}.tar.gz'.format(u_id)
+        )
+        with open(tarball_path, 'wb') as f:
+            f.write(tarball_decoded)
+            return tarball_path
     def run(self):
         try:
             self._init_platform_params()
@@ -607,26 +628,3 @@ class AppManager(object):
             self.log.error(exc, exc_info=True)
             self._cleanup()
 
-    def _redis_set_app_state(self, app_name, state):
-        app = self._redis_get_app(app_name)
-        app['state'] = state
-        self._redis.lset(self.REDIS_APP_LIST_NAME, app_index, json.dumps(app))
-
-    def _redis_get_app(self, app_name):
-            apps = self._redis_get_app_list()
-            app, app_index = self._check_app_exists(app_name, apps)
-
-            if app_index == -1:
-                return None
-            return app
-
-    def _store_app_tar(self, tar_b64, dest_dir):
-        tarball_decoded = base64.b64decode(tar_b64)
-        u_id = uuid.uuid4().hex[0:8]
-        tarball_path = os.path.join(
-            self.APP_STORAGE_DIR,
-            'app-{}.tar.gz'.format(u_id)
-        )
-        with open(tarball_path, 'wb') as f:
-            f.write(tarball_decoded)
-            return tarball_path

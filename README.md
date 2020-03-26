@@ -66,6 +66,7 @@ max_retries: <int>
 ## Usage
 
 ### Application Manager Daemon
+
 ```bash
 [I] ➜ ./app_manager.py --help                                                                                
 usage: app_manager.py [-h] [--host HOST] [--port PORT] [--vhost VHOST] [--username USERNAME] [--password PASSWORD] [--queue-size QUEUE_SIZE] [--heartbeat HEARTBEAT] [--config CONFIG] [--debug [DEBUG]]
@@ -91,6 +92,21 @@ optional arguments:
 
 Username defines the unique id of the device (`{thing_id}`).
 
+### Get Applications Example
+
+Returns a list of the installed applications.
+
+Usage example:
+
+```bash
+./get_apps.py \
+    --device-id device2 \
+    --host r4a-platform.ddns.net \
+    --port 5782 \
+    --vhost / \
+    --debug \
+```
+
 ### Start Application Example
 
 An example demonstrating application deployment call can be found in
@@ -100,12 +116,12 @@ Usage example:
 
 ```bash
 ./start_app.py \
+    --app-id test-app
     --device-id device2 \
-    --host 155.207.33.189 \
+    --host r4a-platform.ddns.net \
     --port 5782 \
     --vhost / \
     --debug \
-    --app-id test-app
 ```
 
 ### Stop Application Example
@@ -116,13 +132,28 @@ An example demonstrating application kill call can be found in
 Usage example:
 
 ```bash
-/stop_app.py \
+./stop_app.py \
     --app-id test-app \
     --device-id device2 \
-    --host 155.207.33.189 \
+    --host r4a-platform.ddns.net \
     --port 5782 \
     --vhost / \
     --debug
+```
+
+### Download Application Example
+
+Usage example:
+
+```bash
+./download_app.py		  \
+    --device-id device2		  \
+    --fpath app.tar.gz		  \
+    --app-type r4a_ros2_py	  \
+    --host r4a-platform.ddns.net  \
+    --port 5782			  \
+    --vhost /			  \
+    --debug			  \
 ```
 
 ## Application Manager Endpoints
@@ -130,6 +161,30 @@ Usage example:
 ### RPC Endpoints
 
 All RPC Endpoints are binded to the `DEFAULT` exchange by default. Furthermore, json is used as the serialization middleware, which means that input and output messages are json formatted.
+
+
+#### Get Applications Service
+
+Returns the list of installed applications.
+
+**URI**: `thing.{thing_id}.appmanager.apps`
+
+**DataModel**:
+  - Input:
+  
+```
+{
+}
+```
+  - Output:
+
+```
+{
+  "status": <200/404>,
+  "apps": [<list_of_apps>],
+  "error": "<error_message>"
+}
+```
 
 #### Download Application Service
 
@@ -155,7 +210,11 @@ A service call will download and install the input app.
   "error": "<error_message>"
 }
 ```
+
 #### Start Application
+
+Starts  a pre-installed application.
+
 **URI**: `thing.{thing_id}.appmanager.start_app`
 
 **DataModel**:
@@ -198,6 +257,9 @@ Stops a running application.
 ```
 
 #### Delete Application
+
+Delete a pre-installed application.
+
 **URI**: `thing.{thing_id}.appmanager.delete_app`
 
 **DataModel**:
