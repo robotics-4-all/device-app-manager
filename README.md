@@ -90,9 +90,27 @@ optional arguments:
 
 ```
 
-Username defines the unique id of the device (`{thing_id}`).
+**NOTE**: Username defines the unique id of the device (`{thing_id}`).
 
-### Get Applications Example
+
+### Examples
+
+#### Get Running Applications Example
+
+Returns a list of the installed applications.
+
+Usage example:
+
+```bash
+./get_running_apps.py \
+    --device-id device2 \
+    --host r4a-platform.ddns.net \
+    --port 5782 \
+    --vhost / \
+    --debug \
+```
+
+#### Get Applications Example
 
 Returns a list of the installed applications.
 
@@ -107,7 +125,7 @@ Usage example:
     --debug \
 ```
 
-### Start Application Example
+#### Start Application Example
 
 An example demonstrating application deployment call can be found in
 `examlles/` examples folder.
@@ -124,7 +142,7 @@ Usage example:
     --debug \
 ```
 
-### Stop Application Example
+#### Stop Application Example
 
 An example demonstrating application kill call can be found in
 `examlles/` examples folder.
@@ -141,7 +159,7 @@ Usage example:
     --debug
 ```
 
-### Download Application Example
+#### Download Application Example
 
 Usage example:
 
@@ -161,6 +179,29 @@ Usage example:
 ### RPC Endpoints
 
 All RPC Endpoints are binded to the `DEFAULT` exchange by default. Furthermore, json is used as the serialization middleware, which means that input and output messages are json formatted.
+
+#### Get Running Applications Service
+
+Returns the list of currently running applications.
+
+**URI**: `thing.{thing_id}.appmanager.apps.running`
+
+**DataModel**:
+  - Input:
+  
+```
+{
+}
+```
+  - Output:
+
+```
+{
+  "status": <200/404>,
+  "apps": [<list_of_apps>],
+  "error": "<error_message>"
+}
+```
 
 
 #### Get Applications Service
@@ -211,7 +252,7 @@ A service call will download and install the input app.
 }
 ```
 
-#### Start Application
+#### Start Application Service
 
 Starts  a pre-installed application.
 
@@ -235,7 +276,7 @@ Starts  a pre-installed application.
 }
 ```
 
-#### Stop Application
+#### Stop Application Service
 
 Stops a running application.
 
@@ -256,7 +297,7 @@ Stops a running application.
 }
 ```
 
-#### Delete Application
+#### Delete Application Service
 
 Delete a pre-installed application.
 
@@ -278,7 +319,16 @@ Delete a pre-installed application.
 ```
 
 
-#### Is Alive
+#### Is Alive Service
+
+Only exists in case someone wants to call this service to see if the
+application manager is running.
+
+Not really useful and not recommended. We recommend different
+ways for checking the state of the application manager, such as listening to the
+**heartbeat topic** -- `thimg.app_manager.heartbeat`. Using the AMQP protocol clients can
+also check the state by validating existence of the various service queues.
+
 **URI**: `thing.{thing_id}.appmanager.is_alive`
 
 **DataModel**:
