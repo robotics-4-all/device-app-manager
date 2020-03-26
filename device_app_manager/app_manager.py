@@ -85,6 +85,7 @@ class AppManager(object):
     APP_STOP_RPC_NAME = 'thing.x.appmanager.stop_app'
     APP_LIST_RPC_NAME = 'thing.x.appmanager.apps'
     ISALIVE_RPC_NAME = 'thing.x.appmanager.is_alive'
+    GET_RUNNING_APPS_RPC_NAME = 'thing.x.appmanager.apps.running'
     HEARTBEAT_TOPIC = 'thing.x.appmanager.heartbeat'
     THING_CONNECTED_EVENT = 'thing.x.appmanager.connected'
     THING_DISCONNECTED_EVENT = 'thing.x.appmanager.disconnected'
@@ -103,6 +104,7 @@ class AppManager(object):
                  heartbeat_interval=10,
                  debug=True,
                  app_list_rpc_name=None,
+                 get_running_apps_rpc_name=None,
                  app_delete_rpc_name=None,
                  app_download_rpc_name=None,
                  app_start_rpc_name=None,
@@ -137,7 +139,9 @@ class AppManager(object):
         if app_stop_rpc_name is not None:
             self.APP_STOP_RPC_NAME = app_stop_rpc_name
         if alive_rpc_name is not None:
-            self.ISALIVE_RPC_NAME
+            self.ISALIVE_RPC_NAME = alive_rpc_name
+        if get_running_apps_rpc_name is not None:
+            self.GET_RUNNING_APPS_RPC_NAME = get_running_apps_rpc_name
         if heartbeat_topic is not None:
             self.HEARTBEAT_TOPIC = heartbeat_topic
         if connected_event is not None:
@@ -249,6 +253,7 @@ class AppManager(object):
         self._init_app_stop_rpc()
         self._init_app_list_rpc()
         self._init_app_delete_rpc()
+        self._init_get_running_apps_rpc()
 
     def _init_isalive_rpc(self):
         rpc_name = self.ISALIVE_RPC_NAME.replace('x', self.platform_creds[0])
@@ -271,6 +276,17 @@ class AppManager(object):
             debug=self.debug)
 
         self._app_list_rpc.run_threaded()
+
+    def _init_get_running_apps_rpc(self):
+        rpc_name = self.GET_RUNNING_APPS_RPC_NAME.replace('x', self.platform_creds[0])
+
+        self._running_apps_rpc = RpcServer(
+            rpc_name,
+            on_request=self._get_running_apps_rpc_callback,
+            connection_params=self.broker_conn_params,
+            debug=self.debug)
+
+        self._running_apps_rpc.run_threaded()
 
     def _init_app_download_rpc(self):
         rpc_name = self.APP_DOWNLOAD_RPC_NAME.replace(
@@ -508,12 +524,33 @@ class AppManager(object):
     def _app_list_rpc_callback(self, msg, meta):
         resp = {
             'status': 200,
-            'apps': []
+            'apps': [],
             'error': ''
         }
         try:
             apps = self._redis.lrange(self.REDIS_APP_LIST_NAME, 0, -1)
-            resp['apps'] = [json.loads(app) for app in apps],
+            resp['apps'] = [json.loads(app) for app in apps]
+            return resp
+        except Exception as e:
+            self.log.error(e, exc_info=True)
+            resp['error'] = str(e)
+            return resp
+
+    def _get_running_apps_rpc_callback(self, msg, meta):
+        resp = {
+            'status': 200,
+            'apps': [],
+            'error': ''
+        }
+        try:
+            apps = self._redis.lrange(self.REDIS_APP_LIST_NAME, 0, -1)
+            _apps = []
+            for _app in apps:
+                _app = json.loads(_app)
+                if _app['state'] == 1:
+                    # Running state
+                    _apps.append(_app)
+            resp['apps'] = _apps
             return resp
         except Exception as e:
             self.log.error(e, exc_info=True)

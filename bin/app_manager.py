@@ -62,6 +62,10 @@ def load_cfg(cfg_file=None):
     except configparser.NoOptionError:
         app_list_rpc_name = 'thing.x.appmanager.apps'
     try:
+        get_running_apps_rpc_name = config.get('services', 'get_running_apps_rpc_name')
+    except configparser.NoOptionError:
+        get_running_apps_rpc_name = 'thing.x.appmanager.apps.running'
+    try:
         app_delete_rpc_name = config.get('services', 'app_delete_rpc_name')
     except configparser.NoOptionError:
         app_delete_rpc_name = 'thing.x.appmanager.delete_app'
@@ -121,6 +125,7 @@ def load_cfg(cfg_file=None):
         'heartbeat_topic': heartbeat_topic,
         'app_delete_rpc_name': app_delete_rpc_name,
         'app_list_rpc_name': app_list_rpc_name,
+        'get_running_apps_rpc_name': get_running_apps_rpc_name,
         'app_download_rpc_name': app_download_rpc_name,
         'app_start_rpc_name': app_start_rpc_name,
         'app_stop_rpc_name': app_stop_rpc_name,
@@ -207,6 +212,7 @@ def main():
         app_start_rpc_name=config['app_start_rpc_name'],
         app_stop_rpc_name=config['app_stop_rpc_name'],
         alive_rpc_name=config['alive_rpc_name'],
+        get_running_apps_rpc_name=config['get_running_apps_rpc_name'],
         connected_event=config['connected_event'],
         disconnected_event=config['disconnected_event'],
         redis_host=config['redis_host'],
