@@ -261,14 +261,13 @@ Sends application logs captured from stdout and stderr to a topic.
 
 #### Stats Publisher
 
-Sends application logs captured from stdout and stderr to a topic.
+Sends runtime stats.
 
-**URI**: `thing.{thing_id}.app.{app_id}.logs`
+**URI**: `thing.{thing_id}.app.{app_id}.stats`
 **DataModel**:
 ```
 {
-  "timestamp": <timestamp_ms>,
-  "log_msg": "<LOG_MSG>"
+  ...
 }
 ```
 
