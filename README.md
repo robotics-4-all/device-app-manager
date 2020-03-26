@@ -125,7 +125,7 @@ Usage example:
 
 ### RPC Endpoints
 
-All RPC Endpoints are binded to the `DEFAULT` exchange by default.
+All RPC Endpoints are binded to the `DEFAULT` exchange by default. Furthermore, json is used as the serialization middleware, which means that input and output messages are json formatted.
 
 #### Download Application Service
 
@@ -151,26 +151,73 @@ A service call will download and install the input app.
   "error": "<error_message>"
 }
 ```
-- Start Application:
-  - URI: `thing.{thing_id}.appmanager.start_app`
-  - DataModel:
-    - In: `{"app_id": <application_unique_id>}`
-    - Out: `{"status": <200/404>, "app_id": <unique_app_id>, "error": "<error_message>"}`
-- Stop Application:
-  - URI: `thing.{thing_id}.appmanager.stop_app`
-  - DataModel:
-    - In: `{"app_id": <application_unique_id>}`
-    - Out: `{"status": <200/404>, "error": "<error_message>"}`
-- Delete Application:
-  - URI: `thing.{thing_id}.appmanager.delete_app`
-  - DataModel:
-    - In: `{"app_id": <application_unique_id>}`
-    - Out: `{"status": <200/404>, "error": "<error_message>"}`
-- Is Alive:
-  - URI: `thing.{thing_id}.appmanager.is_alive`
-  - DataModel:
-    - In: `{}`
-    - Out: `{}`
+#### Start Application
+**URI**: `thing.{thing_id}.appmanager.start_app`
+
+**DataModel**:
+  - Input:
+  
+```
+{
+  "app_id": <application_unique_id>
+}
+```
+  - Output:
+  
+```
+{
+  "status": <200/404>,
+  "app_id": <application_unique_id>,
+  "error": "<error_message>"
+}
+```
+
+#### Stop Application
+
+Stops a running application.
+
+**URI**: `thing.{thing_id}.appmanager.stop_app`
+
+**DataModel**:
+  - Input:
+```
+{
+  "app_id": <application_unique_id>
+}
+```
+  - Output:
+```
+{
+  "status": <200/404>,
+  "error": "<error_message>"
+}
+```
+
+#### Delete Application
+**URI**: `thing.{thing_id}.appmanager.delete_app`
+
+**DataModel**:
+  - Input:      
+```
+{
+  "app_id": <application_unique_id>
+}
+```
+  - Output:
+```
+{
+  "status": <200/404>,
+  "error": "<error_message>"
+}
+```
+
+
+#### Is Alive:
+**URI**: `thing.{thing_id}.appmanager.is_alive`
+
+**DataModel**:
+  - Input: `{}`
+  - Output: `{}`
 
 ### Publish Endpoints
 
