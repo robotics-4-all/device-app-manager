@@ -67,21 +67,25 @@ max_retries: <int>
 
 ### Application Manager Daemon
 ```bash
-[I] ➜ ./app_manager.py --help
-usage: app_manager.py [-h] [--host HOST] [--port PORT] [--vhost VHOST] [--username USERNAME] [--password PASSWORD] [--queue-size QUEUE_SIZE] [--debug [DEBUG]]
+[I] ➜ ./app_manager.py --help                                                                                
+usage: app_manager.py [-h] [--host HOST] [--port PORT] [--vhost VHOST] [--username USERNAME] [--password PASSWORD] [--queue-size QUEUE_SIZE] [--heartbeat HEARTBEAT] [--config CONFIG] [--debug [DEBUG]]
 
-Application Manager CLI.
+Application Manager CLI
 
 optional arguments:
   -h, --help            show this help message and exit
   --host HOST           AMQP broker host (IP/Hostname)
   --port PORT           AMQP broker listening port
-  --vhost VHOST         Virtual host to connect to.
+  --vhost VHOST         Virtual host to connect to
   --username USERNAME   Authentication username
   --password PASSWORD   Authentication password
   --queue-size QUEUE_SIZE
                         Maximum queue size.
+  --heartbeat HEARTBEAT
+                        Heartbeat interval in seconds
+  --config CONFIG       Config file path
   --debug [DEBUG]       Enable debugging
+
 
 ```
 
@@ -212,7 +216,7 @@ Stops a running application.
 ```
 
 
-#### Is Alive:
+#### Is Alive
 **URI**: `thing.{thing_id}.appmanager.is_alive`
 
 **DataModel**:
@@ -242,10 +246,35 @@ Each application deployment creates a series of endpoints.
 
 ### Publish Endpoints
 
-- Logs: Sends application logs captured from stdout and stderr to a topic.
-  - URI: `thing.{thing_id}.app.{app_id}.logs`
-  - DataModel: `{"timestamp": <timestamp_ms>, "log_msg": "<LOG_MSG>"}`
+#### Log Publisher
 
-- AppStarted Event: Fires once, on application launch.
-  - URI: `thing.{thing_id}.app.{app_id}.started`
-  - DataModel: `{}`
+Sends application logs captured from stdout and stderr to a topic.
+
+**URI**: `thing.{thing_id}.app.{app_id}.logs`
+**DataModel**:
+```
+{
+  "timestamp": <timestamp_ms>,
+  "log_msg": "<LOG_MSG>"
+}
+```
+
+#### Stats Publisher
+
+Sends application logs captured from stdout and stderr to a topic.
+
+**URI**: `thing.{thing_id}.app.{app_id}.logs`
+**DataModel**:
+```
+{
+  "timestamp": <timestamp_ms>,
+  "log_msg": "<LOG_MSG>"
+}
+```
+
+#### AppStarted Event
+
+Fires once, on application launch.
+
+**URI**: `thing.{thing_id}.app.{app_id}.started`
+**DataModel**: `{}`
