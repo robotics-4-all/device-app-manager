@@ -4,6 +4,8 @@ import sys
 import os
 import time
 
+import yaml
+
 from utilities import TekException
 from utilities import Languages
 from utilities import InputMessage
@@ -11,7 +13,28 @@ from utilities import Colors
 
 from robot_api import RobotAPI
 
-try:
+
+def read_init_params():
+    params_file = 'init.conf'
+    if not os.path.isfile(params_file):
+        print('App params file <{}> does not exist'.format(params_file))
+        sys.exit(1)
+    with open(params_file, 'r') as stream:
+        try:
+            params = yaml.safe_load(stream)
+            return params
+        except yaml.YAMLError as exc:
+            print(exc)
+            sys.exit(1)
+        except Exception as exc:
+            print(exc)
+            sys.exit(1)
+
+
+def app_main(params=()):
+    ## Here you write the application login, using the RobotAPI class
+    ## to communicate with the robot/device
+    """
     rapi = RobotAPI()
 
     rapi.speak(InputMessage({
@@ -54,62 +77,13 @@ try:
         'language': Languages.EL
     }))
 
-    out = rapi.showOptions(InputMessage({
-        'options': ['Kalimera Ellada', 'Kalimera Athina'],
-        'duration': 5
-    }))
-    out.print()
+    """
 
-    rapi.speak(InputMessage({
-        'texts': ['Στάσου, πράσινο'],
-        'volume': 100,
-        'language': Languages.EL
-    }))
 
-    out = rapi.showColor(InputMessage({
-        'color': Colors.GREEN.value,
-        'duration': 5
-    }))
-    out.print()
-
-    rapi.speak(InputMessage({
-        'texts': ['Θα ηχογραφήσω κάτι. Πώς σε λενε;'],
-        'volume': 100,
-        'language': Languages.EL
-    }))
-
-    out = rapi.recordSound(InputMessage({
-        'name': 'test_sound_1',
-        'duration': 3,
-        'save_file_url': '/tmp/tmp.wav'
-    }))
-    sound_str = out.data['record']
-
-    rapi.speak(InputMessage({
-        'texts': ['Η απάντηση της ηχογράφησης είναι'],
-        'volume': 100,
-        'language': Languages.EL
-    }))
-
-    out = rapi.replaySound(InputMessage({
-        'is_file': False,
-        'string': sound_str,
-        'volume': 100
-    }))
-    out.print()
-
-    rapi.speak(InputMessage({
-        'texts': ['Το αρχείο που αποθηκεύτηκε είναι'],
-        'volume': 100,
-        'language': Languages.EL
-    }))
-
-    out = rapi.replaySound(InputMessage({
-        'is_file': True,
-        'string': '/tmp/tmp.wav',
-        'volume': 100
-    }))
-    out.print()
-
-except TekException:
-    pass
+if __name__ == "__main__":
+    app_params = read_init_params()
+    try:
+        app_main(app_params)
+    except Exception as exc:
+        print(exc)
+        sys.exit(1)
