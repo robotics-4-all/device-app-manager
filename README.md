@@ -198,8 +198,23 @@ Returns the list of currently running applications.
 ```
 {
   "status": <200/404>,
-  "apps": [<list_of_apps>],
+  "apps": [<app>],
   "error": "<error_message>"
+}
+```
+
+where `app` has the following schema:
+
+```
+{
+  "name": "test",
+  "state": 0,
+  "type": "py3",
+  "tarball_path": "/home/klpanagi/.apps/app-bf881071.tar.gz",
+  "docker_image": "test",
+  "docker_container": {"name": "", "id": ""},
+  "create_at": 1585761177,
+  "updated_at": 1585761226
 }
 ```
 
@@ -222,8 +237,22 @@ Returns the list of installed applications.
 ```
 {
   "status": <200/404>,
-  "apps": [<list_of_apps>],
+  "apps": [<app>],
   "error": "<error_message>"
+}
+```
+
+where `app` has the following schema:
+
+```
+{
+  "name": "test",
+  "state": 0,
+  "type": "py3",
+  "docker_image": "test",
+  "docker_container": {"name": "", "id": ""},
+  "create_at": 1585761177,
+  "updated_at": 1585761226
 }
 ```
 
