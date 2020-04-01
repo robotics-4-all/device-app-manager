@@ -11,10 +11,12 @@ import docker
 import atexit
 import tarfile
 import threading
+import json
 
 from jinja2 import Template
 
 from ._logging import create_logger
+from .redis_controller import RedisController
 
 from amqp_common import (
     ConnectionParameters,
@@ -25,6 +27,7 @@ from amqp_common import (
 
 
 class AppDeployment(object):
+    APP_TYPE = 'py3'
     PLATFORM_APP_LOGS_TOPIC_TPL = 'thing.x.app.y.logs'
     PLATFORM_APP_STATS_TOPIC_TPL = 'thing.x.app.y.stats'
     APP_STARTED_EVENT = 'thing.x.app.y.started'
@@ -36,63 +39,135 @@ class AppDeployment(object):
     TMP_DIR = '/tmp/app-deployments'
     # If set to tcp can deploy remotely
     DOCKER_DAEMONN_URL = 'unix://var/run/docker.sock'
+    REDIS_APP_LIST_NAME = 'appmanager.apps'
 
     def __init__(
         self,
         platform_params,
         app_name,
-        app_type,
-        app_tarball_path,
         group=None,
         target=None,
         name=None,
-        args=(),
-        kwargs=None,
         verbose=None,
         remote_logging=True,
-        send_app_stats=False
+        send_app_stats=False,
+        redis_host='localhost',
+        redis_port=6379,
+        redis_db=0,
+        redis_password=None,
+        redis_app_list_name='appmanager.apps'
     ):
-        self.args = args
-        self.kwargs = kwargs
 
+        self.app_type = self.APP_TYPE
         self.app_name = app_name
-        self.app_type = app_type
-        self.app_tarball_path = app_tarball_path
-
+        self.app_state = None
+        self.app_tar_path = None
+        self.image_id = None
+        self.docker_container = None
         self.platform_params = platform_params
         self.platform_creds = platform_params.credentials
-
         self.remote_logging = remote_logging
         self.send_app_stats = send_app_stats
 
+        self.REDIS_APP_LIST_NAME = redis_app_list_name
+
+        self.__init_logger()
+
+        self.redis = RedisController(redis_host, redis_port, redis_db,
+                                     redis_password,
+                                     app_list_name=self.REDIS_APP_LIST_NAME)
+
+        try:
+            self._load_app_info_from_db()
+        except ValueError as exc:
+            # Does not exist locally
+            self.log.warn('Application does not exist locally.')
+            self.image_id = self.app_name
+
         self.container = None
-        self.image = None
         self.script_dir = os.path.dirname(os.path.realpath(__file__))
 
         # Register callback for garbage collector exit. Cleanup.
         atexit.register(self._cleanup)
 
-        self.app_name = self._gen_uid() if not self.app_name else self.app_name
-        self.image_id = 'app-{}'.format(self.app_name)
-        self.container_id = None
+        self.container_name = self.docker_container['name'] if self.docker_container \
+            is not None else 'app-r4a-{}'.format(self.app_name)
+        self.container_id = self.docker_container['id'] if self.docker_container \
+            is not None else None
 
         self.app_stats_thread = None
         self.app_log_thread = None
 
-        # Instantiate a docker client
-        # self.docker_client = docker.APIClient(base_url=self.DOCKER_DAEMONN_URL)
         self.docker_client = docker.from_env()
-        self.__init_logger()
+
+    def _load_app_info_from_db(self):
+        _app = self.redis.get_app(self.app_name)
+        # self.app_type = _app['type']
+        self.app_state = _app['state']
+        self.app_tar_path = _app['tarball_path']
+        self.image_id = _app['docker_image']
+        self.container_name = _app['docker_container']
+
+    def build(self, app_tarball_path=None):
+        tmp_dir = os.path.join(self.TMP_DIR,
+                               self.app_name)
+
+        # Create temp dir if it does not exist
+        if not os.path.exists(tmp_dir):
+            os.mkdir(tmp_dir)
+
+        app_src_dir = os.path.join(tmp_dir, 'app')
+        dockerfile_path = os.path.join(tmp_dir, 'Dockerfile')
+
+        self._untar(app_tarball_path, app_src_dir)
+        self._create_dockerfile_from_tpl(self.APP_SRC_DIR,
+                                         self.dockerfile_tpl,
+                                         dockerfile_path)
+        self._build_image(tmp_dir, self.image_id)
+        if app_tarball_path is not None:
+            self.app_tar_path = app_tarball_path
+        return self.image_id
+
+    def deploy(self):
+        _ = self.run_container(self.image_id, self.container_name)
+        return self.container_name, self.container_id
+
+    def run_container(
+            self,
+            image_id,
+            deployment_id,
+            detach=True,
+            privileged=False
+    ):
+        container = self.docker_client.containers.run(
+            image_id,
+            name=deployment_id,
+            detach=detach,
+            # auto_remove=True,
+            # network='host',
+            network_mode='host',
+            ipc_mode='host',
+            pid_mode='host',
+            # publish_all_ports=True,
+            # remove=True
+        )
+        self.log.debug('[*] - Container created!')
+        self.container = container
+        self.container_id = container.id
+
+        if self.remote_logging:
+            self._detach_app_logging(deployment_id)
+        if self.send_app_stats:
+            self._detach_app_stats(deployment_id)
+
+    def stop(self):
+        self._send_appstoped_event(self.app_name)
+        self._cleanup()
 
     def __init_logger(self):
         """Initialize Logger."""
         self.log = create_logger(
             self.__class__.__name__ + '-' + self.app_name)
-
-
-    def stop(self):
-        self._send_appstoped_event(self.app_name)
-        self._cleanup()
 
     def _create_dockerfile_from_tpl(self, app_src_dir, tpl_path, dest_path):
         tpl = Template(tpl_path)
@@ -116,7 +191,7 @@ class AppDeployment(object):
     def _build_image(self, dockerfile_path, image_id):
         self.log.debug('[*] - Building image {} ...'.format(
             image_id))
-        self.image, logs = self.docker_client.images.build(
+        image, logs = self.docker_client.images.build(
             path=dockerfile_path,
             tag=image_id,
             rm=True,
@@ -125,6 +200,7 @@ class AppDeployment(object):
         for l in logs:
             self.log.debug(l)
         self.log.info('Created docker image <{}>'.format(image_id))
+        return image
 
     def _send_appstarted_event(self, app_name):
         event_uri = self.APP_STARTED_EVENT.replace(
@@ -203,35 +279,7 @@ class AppDeployment(object):
             if stop_event.is_set():
                 break
 
-    def run_container(
-            self,
-            image_id,
-            deployment_id,
-            detach=True,
-            privileged=False
-    ):
-        container = self.docker_client.containers.run(
-            image_id,
-            name=deployment_id,
-            detach=detach,
-            # auto_remove=True,
-            # network='host',
-            network_mode='host',
-            ipc_mode='host',
-            pid_mode='host',
-            # publish_all_ports=True,
-            # remove=True
-        )
-        self.log.debug('[*] - Container created!')
-        self.container = container
-        self.container_id = container.id
-
-        if self.remote_logging:
-            self.detach_app_logging(deployment_id)
-        if self.send_app_stats:
-            self.detach_app_stats(deployment_id)
-
-    def detach_app_logging(self, app_name):
+    def _detach_app_logging(self, app_name):
         t_stop_event = threading.Event()
         t = threading.Thread(target=self._app_log_publish_loop,
                              args=(app_name, t_stop_event))
@@ -242,7 +290,7 @@ class AppDeployment(object):
             'stop_event': t_stop_event
         }
 
-    def detach_app_stats(self, app_name):
+    def _detach_app_stats(self, app_name):
         t_stop_event = threading.Event()
         t = threading.Thread(target=self._app_stats_publish_loop,
                              args=(app_name, t_stop_event))
@@ -253,29 +301,6 @@ class AppDeployment(object):
             'stop_event': t_stop_event
         }
 
-    def build(self):
-        tmp_dir = os.path.join(self.TMP_DIR,
-                               self.app_name)
-
-        # Create temp dir if it does not exist
-        if not os.path.exists(tmp_dir):
-            os.mkdir(tmp_dir)
-
-        app_src_dir = os.path.join(tmp_dir, 'app')
-        dockerfile_path = os.path.join(tmp_dir, 'Dockerfile')
-
-        self._untar(self.app_tarball_path, app_src_dir)
-        self._create_dockerfile_from_tpl(self.APP_SRC_DIR,
-                                         self.dockerfile_tpl,
-                                         dockerfile_path)
-        self._build_image(tmp_dir, self.image_id)
-        return self.image_id
-
-    def deploy(self):
-        self.container_name = self.image_id
-        _ = self.run_container(self.image_id, self.container_name)
-        return self.container_name, self.container_id
-
     def _read_dockerfile_template(self, fname):
         tpl_path = os.path.join(self.script_dir, 'templates', fname)
         with open(tpl_path, "r+") as fp:
@@ -284,6 +309,19 @@ class AppDeployment(object):
 
     def _gen_uid(self):
         return uuid.uuid4().hex[0:8]
+
+    def _serialize(self):
+        return {
+            'name': self.app_name,
+            'state': self.app_state,
+            'type': self.app_type,
+            'tarball_path': self.app_tar_path,
+            'docker_image': self.image_id,
+            'docker_container': {
+                'name': self.container_name,
+                'id': self.container_id
+            }
+        }
 
     def _cleanup(self):
         if not self.docker_client:
@@ -299,21 +337,11 @@ class AppDeployment(object):
         except docker.errors.NotFound as e:
             self.log.debug(
                 'Could not kill container <{}>'.format(self.container_name))
-        # try:
-        #     self.log.debug('Removing container: {}'.format(self.container.id))
-        #     self.container.remove(force=True)
-        # except docker.errors.NotFound as e:
-        #     self.log.debug(
-        #         'Could not remove container <{}>'.format(self.container.id))
-        # try:
-        #     self.log.debug('Removing image: {}'.format(self.image.id.split(':')[1]))
-        #     self.docker_client.images.remove(self.image.id.split(':')[1])
-        # except docker.errors.NotFound as e:
-        #     self.log.debug('Could not remove image <{}>'.format(self.image.id))
 
 
 class AppDeploymentPython3(AppDeployment):
     IMAGE = 'python:3.7-alpine'
+    APP_TYPE = 'py3'
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -323,6 +351,7 @@ class AppDeploymentPython3(AppDeployment):
 
 class AppDeploymentR4AROS2Py(AppDeployment):
     IMAGE = 'r4a/app-ros2'
+    APP_TYPE = 'r4a_ros2_py'
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

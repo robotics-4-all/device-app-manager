@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from __future__ import (
     absolute_import,
     division,
@@ -32,6 +30,7 @@ from amqp_common import (
 
 from ._logging import create_logger, enable_debug, disable_debug
 from .deployments import *
+from .redis_controller import RedisController
 
 
 class Protocol(object):
@@ -175,15 +174,9 @@ class AppManager(object):
         self.debug = debug
 
         self._create_app_storage_dir()
-
-        self._redis = redis.Redis(
-            host=self.REDIS_HOST,
-            port=self.REDIS_PORT,
-            db=self.REDIS_DB,
-            password=self.REDIS_PASSWORD,
-            decode_responses=True,
-            charset="utf-8"
-        )
+        self.redis = RedisController(redis_host, redis_port, redis_db,
+                                     redis_password,
+                                     app_list_name=redis_app_list_name)
 
     @property
     def debug(self):
@@ -345,75 +338,55 @@ class AppManager(object):
             app_name = msg['app_id'] if 'app_id' in msg else ''
             tarball_b64 = app_file['data']
 
-            apps = self._redis_get_app_list()
-
             tarball_path = self._store_app_tar(
                 tarball_b64, self.APP_STORAGE_DIR)
 
-            app_deploy = self._get_app_object(
-                app_name, app_type, tarball_path)
-            self._build_app(app_deploy)
-            app_image = app_deploy.image_id
-
-            app, app_index = self._check_app_exists(app_name, apps)
-            if app_index != -1:
-                # Update
-                app['type'] = app_type
-                app['path'] = tarball_path
-                app['image'] = app_image
-                self.log.info('Updating app <{}>'.format(app_name))
-                self._redis.lset(
-                    self.REDIS_APP_LIST_NAME, app_index, json.dumps(app))
+            app_d = self._get_app_object(app_name, app_type)
+            app_d.build(tarball_path)
+            if self.redis.app_exists(app_name):
+                ## Updating app
+                self.log.info('Updating App in DB: <{}>'.format(app_name))
+                self.redis.update_app(app_d._serialize())
             else:
-                # Create
-                app = {
-                    'name': app_name,
-                    'type': app_type,
-                    'path': tarball_path,
-                    'image': app_image,
-                    'container': {
-                        'name': '',
-                        'id': ''
-                    },
-                    'state': 0,
-                }
+                ## Creating new app instance in db
+                self.log.info('Storing new App in DB: <{}>'.format(app_name))
+                self.redis.add_app(app_d._serialize())
 
-                self._redis.lpush(
-                    self.REDIS_APP_LIST_NAME, json.dumps(app))
-            ## Save db in hdd
-            self._redis.bgsave()
+            self.redis.save_db()
 
             return {
                 'status': 200,
+                'app_id': app_name,
                 'error': ''
             }
         except Exception as e:
             self.log.error(e, exc_info=True)
             return {
                 'status': 404,
+                'app_id': '',
                 'error': str(e)
             }
 
     def _delete_app_rpc_callback(self, msg, meta):
         try:
-            # Optional. Empty app_name means unnamed app
-            if not 'app_name' in msg:
-                raise ValueError('Message schema error. app_name is not defined')
+            if not 'app_id' in msg:
+                raise ValueError('Message schema error. app_id is not defined')
             app_name = msg['app_id']
 
-            apps = self._redis_get_app_list()
+            if not self.redis.app_exists(app_name):
+                raise ValueError('App does not exist locally')
+            app = self.redis.get_app(app_name)
 
-            app, app_index = self._check_app_exists(app_name, apps)
-            if app_index == -1:
-                raise ValueError('Application does not exist')
+            app_d = self._get_app_object(app_name, app['type'])
+            app_d.stop()
 
             self.log.info('Deleting Application <{}>'.format(app_name))
-            self._redis.lrem(self.REDIS_APP_LIST_NAME, 1, app_index)
+            self.redis.delete_app(app_name)
 
             ## TODO: Remove from docker!!
 
             ## Save db in hdd
-            self._redis.bgsave()
+            self.redis.save_db()
 
             return {
                 'status': 200,
@@ -425,6 +398,7 @@ class AppManager(object):
                 'status': 404,
                 'error': str(e)
             }
+
     def _start_app_rpc_callback(self, msg, meta):
         try:
             # Optional. Empty app_name means unnamed app
@@ -435,32 +409,22 @@ class AppManager(object):
             elif app_name == '':
                 raise ValueError('Parameter app_name value is empty')
 
-            apps = self._redis_get_app_list()
-            if len(apps) == 0:
-                raise ValueError(
-                    'Application with name <{}> not found in local storage'.format(
-                        app_name))
-            elif len(apps) > 1:
-                raise NotImplementedError(
-                    'Found more than 1 app with the same name in local storage')
-            app, app_index = self._check_app_exists(app_name, apps)
-            if app_index == -1:
-                raise ValueError('Application does not exist')
-            ## Deploy application
-            app_deploy = self._get_app_object(
-                app['name'], app['type'], app['path'])
+            if not self.redis.app_exists(app_name):
+                raise ValueError('App does not exist locally')
 
-            container_name, container_id = self._deploy_app(app_deploy)
+            app = self.redis.get_app(app_name)
 
-            app['container'] = {
-                'name': container_name,
-                'id': container_id
-            }
-            app['state'] = 1
-            self._redis.lset(self.REDIS_APP_LIST_NAME, app_index, json.dumps(app))
+            app_d = self._get_app_object(app_name, app['type'])
+
+            app_d.deploy()
+
+            self.redis.set_app_state(app_name, 1)
+            self.redis.set_app_property(app_name, 'docker_container',
+                                        {'name': app_d.container_name,
+                                         'id': app_d.container_id})
 
             ## Save db in hdd
-            self._redis.bgsave()
+            self.redis.save_db()
 
             resp =  {
                 'status': 200,
@@ -475,44 +439,30 @@ class AppManager(object):
                 'error': str(e)
             }
         finally:
-            print(resp)
             return resp
 
     def _stop_app_rpc_callback(self, msg, meta):
-        app_name = msg['app_id']
         try:
-            apps = self._redis_get_app_list()
-            if len(apps) == 0:
-                raise ValueError(
-                    'Application with name <{}> not found in local storage'.format(
-                        app_name))
-            elif len(apps) > 1:
-                raise NotImplementedError(
-                    'Found more than 1 app with the same name in local storage')
-            app, app_index = self._check_app_exists(app_name, apps)
-            if app_index == -1:
-                raise ValueError('Application does not exist')
+            if not 'app_id' in msg:
+                raise ValueError('Message schema error. app_id is not defined')
+            app_name = msg['app_id']
 
-            if app['state'] == 0:
-                raise ValueError('Application is not running')
+            if not self.redis.app_exists(app_name):
+                raise ValueError('App does not exist locally')
 
-            app_deploy = self._get_app_object(
-                app['name'], app['type'], app['path'])
-            app_deploy.container_name = app['container']['id']
-            app_deploy.stop()
+            app = self.redis.get_app(app_name)
 
-            # Update Redis
-            app['container'] = ''
-            app['state'] = 0
-            self._redis.lset(self.REDIS_APP_LIST_NAME, app_index, json.dumps(app))
+            app_d = self._get_app_object(app_name, app['type'])
+            app_d.stop()
 
-            ## Save db in hdd
-            self._redis.bgsave()
+            self.redis.set_app_state(app_name, 0)
+            self.redis.save_db()
 
             self.log.info('App {} stopped!'.format(app_name))
+
             return {
                 'status': 200,
-                'skata': 1
+                'error': ''
             }
         except Exception as e:
             self.log.error(e, exc_info=True)
@@ -528,8 +478,8 @@ class AppManager(object):
             'error': ''
         }
         try:
-            apps = self._redis.lrange(self.REDIS_APP_LIST_NAME, 0, -1)
-            resp['apps'] = [json.loads(app) for app in apps]
+            apps = self.redis.get_apps()
+            resp['apps'] = apps
             return resp
         except Exception as e:
             self.log.error(e, exc_info=True)
@@ -543,10 +493,9 @@ class AppManager(object):
             'error': ''
         }
         try:
-            apps = self._redis.lrange(self.REDIS_APP_LIST_NAME, 0, -1)
+            apps = self.redis.get_apps()
             _apps = []
             for _app in apps:
-                _app = json.loads(_app)
                 if _app['state'] == 1:
                     # Running state
                     _apps.append(_app)
@@ -588,7 +537,7 @@ class AppManager(object):
         p.close()
         del p
 
-    def _get_app_object(self, app_name, app_type, app_tar_path):
+    def _get_app_object(self, app_name, app_type):
         # Add here more deployment options.
         # TODO: The way deployment definition works much change to module-based.
         # Generalize the way so that it is easier to maintain extentions.
@@ -596,49 +545,24 @@ class AppManager(object):
             app_deployment = AppDeploymentPython3(
                 self.broker_conn_params,
                 app_name,
-                app_type,
-                app_tar_path)
+                redis_host=self.REDIS_HOST,
+                redis_port=self.REDIS_PORT,
+                redis_db=self.REDIS_DB,
+                redis_password=self.REDIS_PASSWORD,
+                redis_app_list_name=self.REDIS_APP_LIST_NAME)
         elif app_type == 'r4a_ros2_py':
             app_deployment = AppDeploymentR4AROS2Py(
                 self.broker_conn_params,
                 app_name,
-                app_type,
-                app_tar_path)
+                redis_host=self.REDIS_HOST,
+                redis_port=self.REDIS_PORT,
+                redis_db=self.REDIS_DB,
+                redis_password=self.REDIS_PASSWORD,
+                redis_app_list_name=self.REDIS_APP_LIST_NAME)
         else:
             raise TypeError(
                 'Application type <{}> not supported'.format(app_type))
         return app_deployment
-
-    def _check_app_exists(self, app_name, apps):
-        app_index = -1
-        index = 0
-        app = {}
-        for _app in apps:
-            _app = json.loads(_app)
-            if _app['name'] == app_name:
-                app = _app
-                app_index = index
-
-            index += 1
-        resp = (app, app_index)
-        return resp
-
-    def _redis_set_app_state(self, app_name, state):
-        app = self._redis_get_app(app_name)
-        app['state'] = state
-        self._redis.lset(self.REDIS_APP_LIST_NAME, app_index, json.dumps(app))
-
-    def _redis_get_app(self, app_name):
-            apps = self._redis_get_app_list()
-            app, app_index = self._check_app_exists(app_name, apps)
-
-            if app_index == -1:
-                return None
-            return app
-
-    def _redis_get_app_list(self):
-        apps = self._redis.lrange(self.REDIS_APP_LIST_NAME, 0, -1)
-        return apps
 
     def _store_app_tar(self, tar_b64, dest_dir):
         tarball_decoded = base64.b64decode(tar_b64)
