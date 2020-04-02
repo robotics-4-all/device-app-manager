@@ -1,6 +1,19 @@
 # device-app-manager
 Component for remotely deploying Applications on Things
 
+## Features
+
+Below is the list of features currently supported by the application manager:
+
+- **Get Applications**: Returns the list of installed applications
+- **Get Running Applications**: Returns the list of currently running applications
+- **Install Application**: Nothing to explain here, the functionality is obvious.
+- **Start Application**: Start a previously installed application
+- **Stop Application**: Stop a currently running application
+- **Delete Application**: Delete an application. Does not terminate the currently running
+application instance. Use the **Stop Application** service in case you need such
+functionality.
+
 ## Supported Application Deployments
 
 ### Python3 Application
@@ -93,6 +106,8 @@ optional arguments:
 
 **NOTE**: Username defines the unique id of the device (`{thing_id}`).
 
+### Configuration
+
 The Application manager daemon can be fully configured via a configuration file,
 located at `~/.config/device_app_manager/config`.
 
@@ -136,87 +151,11 @@ app_list_name = appmanager.apps
 ```
 
 ### Examples
+Examples are provided in the **examples** directory of this repository.
 
-#### Get Running Applications Example
+We provide an example for each, provided by the application manager, interface.
 
-Returns a list of the installed applications.
-
-Usage example:
-
-```bash
-./get_running_apps.py \
-    --device-id device2 \
-    --host r4a-platform.ddns.net \
-    --port 5782 \
-    --vhost / \
-    --debug \
-```
-
-#### Get Applications Example
-
-Returns a list of the installed applications.
-
-Usage example:
-
-```bash
-./get_apps.py \
-    --device-id device2 \
-    --host r4a-platform.ddns.net \
-    --port 5782 \
-    --vhost / \
-    --debug \
-```
-
-#### Start Application Example
-
-An example demonstrating application deployment call can be found in
-`examlles/` examples folder.
-
-Usage example:
-
-```bash
-./start_app.py \
-    --app-id test-app
-    --device-id device2 \
-    --host r4a-platform.ddns.net \
-    --port 5782 \
-    --vhost / \
-    --debug \
-```
-
-#### Stop Application Example
-
-An example demonstrating application kill call can be found in
-`examlles/` examples folder.
-
-Usage example:
-
-```bash
-./stop_app.py \
-    --app-id test-app \
-    --device-id device2 \
-    --host r4a-platform.ddns.net \
-    --port 5782 \
-    --vhost / \
-    --debug
-```
-
-#### Install Application Example
-
-Usage example:
-
-```bash
-./install_app.py		  \
-    --device-id device2		  \
-    --fpath app.tar.gz		  \
-    --app-type r4a_ros2_py	  \
-    --host r4a-platform.ddns.net  \
-    --port 5782			  \
-    --vhost /			  \
-    --debug			  \
-```
-
-## Application Manager Endpoints
+## Application Manager Platform Control Interfaces
 
 ### RPC Endpoints
 
@@ -406,7 +345,10 @@ also check the state by validating existence of the various service queues.
   - Input: `{}`
   - Output: `{}`
 
-### Publish Endpoints
+### Platform Monitoring Interfaces
+
+These outbound platform monitoring interfaces pushes information from the Edge to the Cloud.
+These are Publishers pushing data to an AMQP message broker.
 
 All Publish Endpoints are binded to the `amq.topic` exchange by default.
 
@@ -454,9 +396,17 @@ Sends runtime stats.
 }
 ```
 
-#### AppStarted Event
+#### Application Started Event
 
 Fires once, on application launch.
 
 **URI**: `thing.{thing_id}.app.{app_id}.started`
+**DataModel**: `{}`
+
+
+#### Application Stopped Event
+
+Fires once, on application termination.
+
+**URI**: `thing.{thing_id}.app.{app_id}.stopped`
 **DataModel**: `{}`
