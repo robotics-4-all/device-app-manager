@@ -60,47 +60,58 @@ def load_cfg(cfg_file):
     except configparser.NoOptionError:
         vhost = '/'
     try:
-        heartbeat_topic = config.get('services', 'heartbeat_topic')
+        heartbeat_topic = config.get('platform_monitoring_interfaces',
+                                     'heartbeat_topic')
     except configparser.NoOptionError:
         heartbeat_topic = 'thing.x.appmanager.hearbeat'
     try:
-        heartbeat_interval = config.get('core', 'heartbeat_interval')
+        heartbeat_interval = config.get('platform_monitoring_interfaces',
+                                        'heartbeat_interval')
     except configparser.NoOptionError:
         heartbeat_interval = 10  # seconds
     try:
-        app_list_rpc_name = config.get('services', 'app_list_rpc_name')
+        app_list_rpc_name = config.get('platform_control_interfaces',
+                                       'app_list_rpc_name')
     except configparser.NoOptionError:
         app_list_rpc_name = 'thing.x.appmanager.apps'
     try:
-        get_running_apps_rpc_name = config.get('services', 'get_running_apps_rpc_name')
+        get_running_apps_rpc_name = config.get('platform_control_interfaces',
+                                               'get_running_apps_rpc_name')
     except configparser.NoOptionError:
         get_running_apps_rpc_name = 'thing.x.appmanager.apps.running'
     try:
-        app_delete_rpc_name = config.get('services', 'app_delete_rpc_name')
+        app_delete_rpc_name = config.get('platform_control_interfaces',
+                                         'app_delete_rpc_name')
     except configparser.NoOptionError:
         app_delete_rpc_name = 'thing.x.appmanager.delete_app'
     try:
-        app_install_rpc_name = config.get('services', 'app_install_rpc_name')
+        app_install_rpc_name = config.get('platform_control_interfaces',
+                                          'app_install_rpc_name')
     except configparser.NoOptionError:
         app_install_rpc_name = 'thing.x.appmanager.download_app'
     try:
-        app_start_rpc_name = config.get('services', 'app_start_rpc_name')
+        app_start_rpc_name = config.get('platform_control_interfaces',
+                                        'app_start_rpc_name')
     except configparser.NoOptionError:
         app_start_rpc_name = 'thing.x.appmanager.start_app'
     try:
-        app_stop_rpc_name = config.get('services', 'app_stop_rpc_name')
+        app_stop_rpc_name = config.get('platform_control_interfaces',
+                                       'app_stop_rpc_name')
     except configparser.NoOptionError:
         app_stop_rpc_name = 'thing.x.appmanager.stop_app'
     try:
-        alive_rpc_name = config.get('services', 'alive_rpc_name')
+        alive_rpc_name = config.get('platform_control_interfaces',
+                                    'alive_rpc_name')
     except configparser.NoOptionError:
         alive_rpc_name = 'thing.x.appmanager.is_alive'
     try:
-        connected_event = config.get('services', 'connected_event')
+        connected_event = config.get('platform_monitoring_interfaces',
+                                     'connected_event')
     except configparser.NoOptionError:
         connected_event = 'thing.x.appmanager.connected'
     try:
-        disconnected_event = config.get('services', 'disconnected_event')
+        disconnected_event = config.get('platform_monitoring_interfaces',
+                                        'disconnected_event')
     except configparser.NoOptionError:
         disconnected_event = 'thing.x.appmanager.disconnected'
     try:

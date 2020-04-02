@@ -93,6 +93,10 @@ optional arguments:
 
 **NOTE**: Username defines the unique id of the device (`{thing_id}`).
 
+The Application manager daemon can be fully configured via a configuration file,
+located at `~/.config/device_app_manager/config`.
+
+A sample configuration file can be found at this repo under the examples directory (`./examples/config.ini`).
 
 ### Examples
 
