@@ -1,5 +1,5 @@
 # device-app-manager
-Component for remotely deploying Applications on Things
+Component for remotely deploying Applications on Edge Devices.
 
 ## Features
 
