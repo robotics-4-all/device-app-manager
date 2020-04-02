@@ -16,7 +16,7 @@ Below is the list of features currently supported by the application manager:
 application instance. Use the **Stop Application** service in case you need such
 functionality.
 
-## Supported Application Deployments
+## Supported Application Types
 
 ### Python3 Application
 
