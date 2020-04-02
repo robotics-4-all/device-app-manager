@@ -1,6 +1,8 @@
 # device-app-manager
 Component for remotely deploying Applications on Edge Devices.
 
+![AppManagerArchitecture](/assets/img/AppManager.png)
+
 ## Features
 
 Below is the list of features currently supported by the application manager:
