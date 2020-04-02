@@ -71,6 +71,9 @@ class Application(object):
 
         self.REDIS_APP_LIST_NAME = redis_app_list_name
 
+        # Register callback for garbage collector exit. Cleanup.
+        atexit.register(self._cleanup)
+
         self.__init_logger()
 
         self.redis = RedisController(redis_host, redis_port, redis_db,
@@ -87,8 +90,6 @@ class Application(object):
         self.container = None
         self.script_dir = os.path.dirname(os.path.realpath(__file__))
 
-        # Register callback for garbage collector exit. Cleanup.
-        atexit.register(self._cleanup)
 
         self.container_name = self.docker_container['name'] if self.docker_container \
             is not None else 'app-r4a-{}'.format(self.app_name)
@@ -99,6 +100,7 @@ class Application(object):
         self.app_log_thread = None
 
         self.docker_client = docker.from_env()
+        self.docker_cli = docker.APIClient(base_url='unix://var/run/docker.sock')
 
     def _load_app_info_from_db(self):
         _app = self.redis.get_app(self.app_name)
@@ -191,16 +193,28 @@ class Application(object):
     def _build_image(self, dockerfile_path, image_id):
         self.log.debug('[*] - Building image {} ...'.format(
             image_id))
-        image, logs = self.docker_client.images.build(
-            path=dockerfile_path,
-            tag=image_id,
-            rm=True,
-            forcerm=True
-        )
-        for l in logs:
-            self.log.debug(l)
+        # image, logs = self.docker_client.build(
+        #     path=dockerfile_path,
+        #     tag=image_id,
+        #     rm=True,
+        #     forcerm=True
+        # )
+        # for l in logs:
+        #     self.log.debug(l)
+        for log_l in self.docker_cli.build(
+                path=dockerfile_path,
+                tag=image_id,
+                rm=True,
+                forcerm=True,
+                decode=True):
+            if 'stream' not in log_l:
+                continue
+            if log_l['stream'] == '\n':
+                continue
+            _l = log_l['stream'].replace('\n', '')
+
+            self.log.debug('[Docker Build - {}]: {}'.format(image_id, _l))
         self.log.info('Created docker image <{}>'.format(image_id))
-        return image
 
     def _send_appstarted_event(self, app_name):
         event_uri = self.APP_STARTED_EVENT.replace(

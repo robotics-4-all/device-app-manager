@@ -48,6 +48,7 @@ Example `app.info`:
 ```yaml
 name: <string>
 version: <string>
+type: <string>
 elsa_version: <string>
 description: <string>
 tags: <array_of_strings>
