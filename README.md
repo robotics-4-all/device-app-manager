@@ -20,8 +20,7 @@ functionality.
 
 ### Python3 Application
 
-This kind of application is not stored locally and it is destroyed after
-execution.
+Can be any Python3 Application. Use the `requirements.txt` file to define python package dependencies to be installed.
 
 Tarball contents:
 
@@ -378,6 +377,7 @@ Each application deployment creates a series of endpoints.
 Sends application logs captured from stdout and stderr to a topic.
 
 **URI**: `thing.{thing_id}.app.{app_id}.logs`
+
 **DataModel**:
 ```
 {
@@ -391,6 +391,7 @@ Sends application logs captured from stdout and stderr to a topic.
 Sends runtime stats.
 
 **URI**: `thing.{thing_id}.app.{app_id}.stats`
+
 **DataModel**:
 ```
 {
@@ -403,6 +404,7 @@ Sends runtime stats.
 Fires once, on application launch.
 
 **URI**: `thing.{thing_id}.app.{app_id}.started`
+
 **DataModel**: `{}`
 
 
@@ -411,4 +413,5 @@ Fires once, on application launch.
 Fires once, on application termination.
 
 **URI**: `thing.{thing_id}.app.{app_id}.stopped`
+
 **DataModel**: `{}`
