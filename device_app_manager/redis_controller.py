@@ -57,11 +57,12 @@ class RedisController(object):
     APP_LIST_NAME = 'appmanager.apps'
 
     def __init__(self, host='localhost', port=6379, db=0,
-                 password=None, app_list_name=None):
+                 password=None, app_list_name=None, auto_save=False):
         self.host = host
         self.port = port
         self.db = db
         self.password = password
+        self.auto_save = auto_save
 
         if app_list_name is not None:
             self.APP_LIST_NAME = app_list_name
@@ -106,7 +107,8 @@ class RedisController(object):
         app['updated_at'] = -1
         self.redis.lpush(
             self.APP_LIST_NAME, json.dumps(app))
-        # self.save_db()
+        if self.auto_save:
+            self.save_db()
 
     def update_app(self, app):
         _app = self.get_app(app['name'])
@@ -120,13 +122,15 @@ class RedisController(object):
 
         self.redis.lset(
             self.APP_LIST_NAME, app_index, json.dumps(_app))
-        # self.save_db()
+        if self.auto_save:
+            self.save_db()
 
     def delete_app(self, app_name):
         # app_index = self._get_app_index(app_name)
         self.redis.lrem(self.APP_LIST_NAME, 1,
                         json.dumps(self.get_app(app_name)))
-        # self.save_db()
+        if self.auto_save:
+            self.save_db()
 
     def set_app_state(self, app_name, state):
         ## States: 0 = NotRunning, 1 = Running
@@ -141,13 +145,16 @@ class RedisController(object):
             }
         app_index = self._get_app_index(app_name)
         self.redis.lset(self.APP_LIST_NAME, app_index, json.dumps(app))
-        # self.save_db()
+        if self.auto_save:
+            self.save_db()
 
     def set_app_property(self, app_name, prop_name, prop_value):
         app = self.get_app(app_name)
         app[prop_name] = prop_value
         app_index = self._get_app_index(app_name)
         self.redis.lset(self.APP_LIST_NAME, app_index, json.dumps(app))
+        if self.auto_save:
+            self.save_db()
 
     def _get_app_index(self, app_name):
         apps = self.get_apps()

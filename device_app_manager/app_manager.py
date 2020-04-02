@@ -29,51 +29,23 @@ from amqp_common import (
 )
 
 from ._logging import create_logger, enable_debug, disable_debug
-from .deployments import *
+from .app import *
 from .redis_controller import RedisController
-
-
-class Protocol(object):
-
-    @staticmethod
-    def response_success(app_id=-1):
-        return {
-            'status': 200,
-            'app_id': app_id,
-            'error': ''
-        }
-
-    @staticmethod
-    def response_error(error_msg=''):
-        return {
-            'status': 404,
-            'app_id': -1,
-            'error': error_msg
-        }
 
 
 class RemoteLogger(object):
     def __init__(self, platform_connection_params=None, topic=None):
+        if topic is None:
+            u_id = uuid.uuid4().hex[0:8]
+            topic = 'logs.{}'.format(u_id)
+        self.topic = topic
         self.pub = PublisherSync(
-                topic=topic, connection_params=platform_connection_params,
-                debug=False)
+            topic=self.topic,
+            connection_params=platform_connection_params,
+            debug=False)
 
     def log(self, msg):
-        pass
-
-
-class AppManagerProtocol(object):
-    def __init__(self):
-        pass
-
-    def rpc_deployapp(self):
-        pass
-
-    def rpc_isalive(self):
-        pass
-
-    def rpc_killapp(self):
-        pass
+        self.pub.publish(msg)
 
 
 class AppManager(object):
@@ -209,14 +181,10 @@ class AppManager(object):
         if self._stop_app_rpc:
             self._stop_app_rpc.stop()
 
-        apps = self._redis_get_app_list()
-        apps = [json.loads(app) for app in apps]
+        apps = self.redis.get_apps()
         app_idx = 0
         for app in apps:
-            app['state'] = 0
-            app['container']['name'] = ''
-            app['container']['id'] = ''
-            self._redis.lset(self.REDIS_APP_LIST_NAME, app_idx, json.dumps(app))
+            self.redis.set_app_state(app['name'], 0)
 
     def _create_app_storage_dir(self):
         if not os.path.exists(self.APP_STORAGE_DIR):
@@ -542,7 +510,7 @@ class AppManager(object):
         # TODO: The way deployment definition works much change to module-based.
         # Generalize the way so that it is easier to maintain extentions.
         if app_type == 'py3':
-            app_deployment = AppDeploymentPython3(
+            app_deployment = AppPython3(
                 self.broker_conn_params,
                 app_name,
                 redis_host=self.REDIS_HOST,
@@ -551,7 +519,7 @@ class AppManager(object):
                 redis_password=self.REDIS_PASSWORD,
                 redis_app_list_name=self.REDIS_APP_LIST_NAME)
         elif app_type == 'r4a_ros2_py':
-            app_deployment = AppDeploymentR4AROS2Py(
+            app_deployment = AppR4AROS2Py(
                 self.broker_conn_params,
                 app_name,
                 redis_host=self.REDIS_HOST,

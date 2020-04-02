@@ -26,7 +26,7 @@ from amqp_common import (
 )
 
 
-class AppDeployment(object):
+class Application(object):
     APP_TYPE = 'py3'
     PLATFORM_APP_LOGS_TOPIC_TPL = 'thing.x.app.y.logs'
     PLATFORM_APP_STATS_TOPIC_TPL = 'thing.x.app.y.stats'
@@ -186,7 +186,7 @@ class AppDeployment(object):
             tar.extractall(dest_path)
             tar.close()
         else:
-            self.log.debug('Not a tarball')
+            raise ValueError('Not a tarball')
 
     def _build_image(self, dockerfile_path, image_id):
         self.log.debug('[*] - Building image {} ...'.format(
@@ -339,7 +339,7 @@ class AppDeployment(object):
                 'Could not kill container <{}>'.format(self.container_name))
 
 
-class AppDeploymentPython3(AppDeployment):
+class AppPython3(Application):
     IMAGE = 'python:3.7-alpine'
     APP_TYPE = 'py3'
 
@@ -349,7 +349,7 @@ class AppDeploymentPython3(AppDeployment):
             'Dockerfile.py3.tpl')
 
 
-class AppDeploymentR4AROS2Py(AppDeployment):
+class AppR4AROS2Py(Application):
     IMAGE = 'r4a/app-ros2'
     APP_TYPE = 'r4a_ros2_py'
 
