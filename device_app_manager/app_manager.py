@@ -50,7 +50,7 @@ class RemoteLogger(object):
 
 class AppManager(object):
     APP_STORAGE_DIR = '~/.apps'
-    APP_DOWNLOAD_RPC_NAME = 'thing.x.appmanager.download_app'
+    APP_INSTALL_RPC_NAME = 'thing.x.appmanager.install_app'
     APP_DELETE_RPC_NAME = 'thing.x.appmanager.delete_app'
     APP_START_RPC_NAME = 'thing.x.appmanager.start_app'
     APP_STOP_RPC_NAME = 'thing.x.appmanager.stop_app'
@@ -77,7 +77,7 @@ class AppManager(object):
                  app_list_rpc_name=None,
                  get_running_apps_rpc_name=None,
                  app_delete_rpc_name=None,
-                 app_download_rpc_name=None,
+                 app_install_rpc_name=None,
                  app_start_rpc_name=None,
                  app_stop_rpc_name=None,
                  alive_rpc_name=None,
@@ -101,8 +101,8 @@ class AppManager(object):
             self.APP_LIST_RPC_NAME = app_list_rpc_name
         if app_delete_rpc_name is not None:
             self.APP_DELETE_RPC_NAME = app_delete_rpc_name
-        if app_download_rpc_name is not None:
-            self.APP_DOWNLOAD_RPC_NAME = app_download_rpc_name
+        if app_install_rpc_name is not None:
+            self.APP_INSTALL_RPC_NAME = app_install_rpc_name
         if app_start_rpc_name is not None:
             self.APP_START_RPC_NAME = app_start_rpc_name
         if app_start_rpc_name is not None:
@@ -150,18 +150,8 @@ class AppManager(object):
                                      redis_password,
                                      app_list_name=redis_app_list_name)
 
-    @property
-    def debug(self):
-        return self._debug
-
-    @debug.setter
-    def debug(self, val):
-        if val:
-            enable_debug(self.log)
-            self._debug = True
-        else:
-            disable_debug(self.log)
-            self._debug = False
+    def install_app(self, app):
+        pass
 
     def _init_platform_params(self):
         self.broker_conn_params = ConnectionParameters(
@@ -178,8 +168,6 @@ class AppManager(object):
         self._send_disconnected_event()
         if self._deploy_rpc:
             self._deploy_rpc.stop()
-        if self._stop_app_rpc:
-            self._stop_app_rpc.stop()
 
         apps = self.redis.get_apps()
         app_idx = 0
@@ -209,7 +197,7 @@ class AppManager(object):
         self._stop_app_rpc = None
         self._isalive_rpc = None
         self._init_isalive_rpc()
-        self._init_app_download_rpc()
+        self._init_app_install_rpc()
         self._init_app_start_rpc()
         self._init_app_stop_rpc()
         self._init_app_list_rpc()
@@ -249,17 +237,17 @@ class AppManager(object):
 
         self._running_apps_rpc.run_threaded()
 
-    def _init_app_download_rpc(self):
-        rpc_name = self.APP_DOWNLOAD_RPC_NAME.replace(
+    def _init_app_install_rpc(self):
+        rpc_name = self.APP_INSTALL_RPC_NAME.replace(
                 'x', self.platform_creds[0])
 
-        self._download_rpc = RpcServer(
+        self._install_rpc = RpcServer(
             rpc_name,
-            on_request=self._download_app_rpc_callback,
+            on_request=self._install_app_rpc_callback,
             connection_params=self.broker_conn_params,
             debug=self.debug)
 
-        self._download_rpc.run_threaded()
+        self._install_rpc.run_threaded()
 
     def _init_app_start_rpc(self):
         rpc_name = self.APP_START_RPC_NAME.replace(
@@ -298,7 +286,7 @@ class AppManager(object):
             'status': 200
         }
 
-    def _download_app_rpc_callback(self, msg, meta):
+    def _install_app_rpc_callback(self, msg, meta):
         try:
             app_type = msg['app_type']
             app_file = msg['app_tarball']

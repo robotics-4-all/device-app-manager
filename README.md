@@ -159,12 +159,12 @@ Usage example:
     --debug
 ```
 
-#### Download Application Example
+#### Install Application Example
 
 Usage example:
 
 ```bash
-./download_app.py		  \
+./install_app.py		  \
     --device-id device2		  \
     --fpath app.tar.gz		  \
     --app-type r4a_ros2_py	  \
@@ -256,11 +256,11 @@ where `app` has the following schema:
 }
 ```
 
-#### Download Application Service
+#### Install Application Service
 
-A service call will download and install the input app.
+A service call will install and install the input app.
 
-**URI**: `thing.{thing_id}.appmanager.download_app`
+**URI**: `thing.{thing_id}.appmanager.install_app`
 
 **DataModel**:
   - Input:
