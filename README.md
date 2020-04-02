@@ -3,6 +3,13 @@ Component for remotely deploying Applications on Edge Devices.
 
 ![AppManagerArchitecture](/assets/img/AppManager.png)
 
+- **Redis DB/Cache**: Uses redis to cache data and store application installations and deployments.
+- **Docker Container Engine**: Applications are deployed in docker containers. This is achieved by
+calling the **docker-ce agent** API to build, run, stop and remove images and containers. It is also
+responsible to attach to proper network(s)m or even to the local host network and pid and ipc namespace, when required.
+
+**Note**: For R4A ROS2 Applications it is necessary to attach the application container to the host IPC and PID Namespace. Elsewhere, DDS communication using FastRTPS could not resolve services in localhost. DDS automatically switched to shared memory communication mode when discovering endpoints running on localhost. Because of the fact that docker containers are isolated from the host machine (up to some level and fully configured - net/pid/ipc stack) by default this type of communication (shared memory) could not be resolved.
+
 ## Features
 
 Below is the list of features currently supported by the application manager:
