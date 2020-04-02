@@ -96,7 +96,44 @@ optional arguments:
 The Application manager daemon can be fully configured via a configuration file,
 located at `~/.config/device_app_manager/config`.
 
-A sample configuration file can be found at this repo under the examples directory (`./examples/config.ini`).
+A sample configuration file can be found at this repo under the [examples](https://github.com/robotics-4-all/device-app-manager/edit/devel/README.md) directory.
+
+```ini
+[core]
+debug = 0
+deployment_basedir = /tmp/r4a-apps
+
+[platform_control_interfaces]
+app_install_rpc_name = thing.x.appmanager.install_app
+app_delete_rpc_name = thing.x.appmanager.delete_app
+app_list_rpc_name = thing.x.appmanager.apps
+get_running_apps_rpc_name = thing.x.appmanager.apps.running
+app_start_rpc_name = thing.x.appmanager.start_app
+app_stop_rpc_name = thing.x.appmanager.stop_app
+is_alive_rpc_name = thing.x.appmanager.is_alive
+
+[platform_monitoring_interfaces]
+heartbeat_interval = 10
+heartbeat_topic = thing.x.appmanager.heartbeat
+connected_event_name = thing.x.appmanager.connected
+disconnected_event_name = thing.x.appmanager.disconnected
+
+[platform]
+host = r4a-platform.ddns.net
+port = 5672
+vhost = /
+rpc_exchange = DEFAULT
+topic_exchange = amq.topic
+username = device3
+password = device3
+
+[redis]
+host = localhost
+port = 6379
+database = 0
+password =
+app_list_name = appmanager.apps
+```
 
 ### Examples
 
