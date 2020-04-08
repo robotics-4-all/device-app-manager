@@ -47,7 +47,7 @@ Tarball contents:
 - `exec.conf`: Scheduling parameters and stored here. This file is used by the
   application scheduler.
 
-**Keyword**: `py3`
+**Keyword**: `r4a_ros2_py`
 
 Example `init.conf`:
 
