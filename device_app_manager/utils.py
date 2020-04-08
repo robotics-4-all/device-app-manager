@@ -6,7 +6,7 @@ from __future__ import (
 )
 
 
-def extract_tarball(tarball_path, dest_path)
+def extract_tarball(tarball_path, dest_path):
     self.log.debug('[*] - Untar {} ...'.format(tarball_path))
     if tarball_path.endswith('tar.gz'):
         tar = tarfile.open(tarball_path)
