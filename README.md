@@ -34,6 +34,8 @@ Tarball contents:
 - `app.py`: python executable
 - `requirements.txt`: python package dependencies file
 
+**Keyword**: `py3`
+
 ### R4A Python3 Application
 
 Tarball contents:
@@ -44,6 +46,8 @@ Tarball contents:
 - `app.info`: Gives information of the application
 - `exec.conf`: Scheduling parameters and stored here. This file is used by the
   application scheduler.
+
+**Keyword**: `py3`
 
 Example `init.conf`:
 
@@ -69,7 +73,7 @@ Example `app.info`:
 ```yaml
 name: <string>
 version: <string>
-type: <string>
+type: "r4a_ros2_py"
 elsa_version: <string>
 description: <string>
 tags: <array_of_strings>
@@ -248,6 +252,10 @@ where `app` has the following schema:
 #### Install Application Service
 
 A service call will install and install the input app.
+
+Supported Applications are:
+- `py3`: Simple Python3 Application
+- `r4a_ros2_py`: R4A ROS2 Application
 
 **URI**: `thing.{thing_id}.appmanager.install_app`
 
