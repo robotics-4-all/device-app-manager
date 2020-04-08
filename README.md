@@ -256,7 +256,7 @@ A service call will install and install the input app.
 ```
 {
   "app_id": "<application_unique_id>",
-  "app_type": <py3/r4a_ros2_py>,
+  "app_type": <r4a_ros2_py>,
   "app_tarball": <BASE64_ENCODED_TARBALL>
 }
 ```
