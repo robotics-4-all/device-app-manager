@@ -193,30 +193,23 @@ class Application(object):
             raise ValueError('Not a tarball')
 
     def _build_image(self, dockerfile_path, image_id):
-        self.log.debug('[*] - Building image {} ...'.format(
-            image_id))
-        # image, logs = self.docker_client.build(
-        #     path=dockerfile_path,
-        #     tag=image_id,
-        #     rm=True,
-        #     forcerm=True
-        # )
-        # for l in logs:
-        #     self.log.debug(l)
-        for log_l in self.docker_cli.build(
+        self.log.debug('[*] - Building image {} ...'.format(image_id))
+        try:
+            image, logs = self.docker_client.images.build(
                 path=dockerfile_path,
                 tag=image_id,
                 rm=True,
-                forcerm=True,
-                decode=True):
-            if 'stream' not in log_l:
-                continue
-            if log_l['stream'] == '\n':
-                continue
-            _l = log_l['stream'].replace('\n', '')
-
-            self.log.debug('[Docker Build - {}]: {}'.format(image_id, _l))
-        self.log.info('Created docker image <{}>'.format(image_id))
+                forcerm=True
+            )
+            for l in logs:
+                self.log.debug(l)
+        except docker.errors.BuildError as e:
+            self.log.error('Build for application <{}> failed!'.format(
+                image_id))
+            for line in e.build_log:
+                if 'stream' in line:
+                    self.log.error(line['stream'].strip())
+            raise e
 
     def _send_appstarted_event(self, app_name):
         event_uri = self.APP_STARTED_EVENT.replace(
