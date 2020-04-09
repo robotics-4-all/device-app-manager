@@ -91,8 +91,10 @@ class Application(object):
         self.script_dir = os.path.dirname(os.path.realpath(__file__))
 
 
+        # self.container_name = self.docker_container['name'] if self.docker_container \
+        #     is not None else 'app-r4a-{}'.format(self.app_name)
         self.container_name = self.docker_container['name'] if self.docker_container \
-            is not None else 'app-r4a-{}'.format(self.app_name)
+            is not None else self.app_name
         self.container_id = self.docker_container['id'] if self.docker_container \
             is not None else None
 
