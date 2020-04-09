@@ -8,6 +8,8 @@ Component for remotely deploying Applications on Edge Devices.
 calling the **docker-ce agent** API to build, run, stop and remove images and containers. It is also
 responsible to attach to proper network(s)m or even to the local host network and pid and ipc namespace, when required.
 
+By viewing the above architecture diagram, someone may think of "Why Redis"? The answer is pretty. We wanted to have as minimal memory footprint that is well tested on end embedded devices, such as Raspberry PIs.
+
 **Note**: For R4A ROS2 Applications it is necessary to attach the application container to the host IPC and PID Namespace. Elsewhere, DDS communication using FastRTPS could not resolve services in localhost. DDS automatically switched to shared memory communication mode when discovering endpoints running on localhost. Because of the fact that docker containers are isolated from the host machine (up to some level and fully configured - net/pid/ipc stack) by default this type of communication (shared memory) could not be resolved.
 
 ## Features
@@ -430,3 +432,9 @@ Fires once, on application termination.
 **URI**: `thing.{thing_id}.app.{app_id}.stopped`
 
 **DataModel**: `{}`
+
+
+## Considerations
+
+- Investigate other container engines or builds that are effective for low-processing devices.
+  - [BalenaEngine](https://github.com/balena-os/balena-engine)
