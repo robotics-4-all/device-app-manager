@@ -200,7 +200,11 @@ class AppManager(object):
                                      'id': app_d.container_id})
 
         ## Save db in hdd
-        self.redis.save_db()
+        try:
+            self.redis.save_db()
+        except redis.exceptions.ResponseError:
+            ## redis.exceptions.ResponseError: Background save already in progress
+            pass
         return app_name
 
     def stop_app(self, app_name):
