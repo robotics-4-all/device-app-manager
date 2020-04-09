@@ -118,7 +118,7 @@ class Application(object):
 
         # Create temp dir if it does not exist
         if not os.path.exists(tmp_dir):
-            os.mkdir(tmp_dir)
+            os.makedirs(tmp_dir, exist_ok=True)
 
         app_src_dir = os.path.join(tmp_dir, 'app')
         dockerfile_path = os.path.join(tmp_dir, 'Dockerfile')
