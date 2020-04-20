@@ -202,7 +202,7 @@ class AppExecutorDocker(object):
 
     def __init__(self, platform_params, redis_params,
                  redis_app_list_name='appmanager.apps',
-                 remote_logging=True):
+                 remote_logging=True, send_stats=False):
         self.platform_params = platform_params
         self.docker_client = docker.from_env()
         self.docker_cli = docker.APIClient(base_url=self.DOCKER_DAEMON_URL)
@@ -210,6 +210,7 @@ class AppExecutorDocker(object):
         self.redis = RedisController(redis_params)
         self.running_apps = []  # Array of tuples (app_name, container_name)
         self.remote_logging = remote_logging
+        self.send_stats = send_stats
         ## TODO: Might change!
         self._device_id = self.platform_params.credentials.username
 
@@ -228,10 +229,20 @@ class AppExecutorDocker(object):
 
         self._send_app_started_event(app_name)
 
+        log_thread = None
         if self.remote_logging:
             log_thread = self._detach_app_logging(_container_name, _container)
 
-        self.running_apps.append((app_name, _container_name, _container))
+        stats_thread = None
+        if self.send_stats:
+            stats_thread = self._detach_app_stats(_container_name, _container)
+
+        exit_capture_thread = self._detach_app_exit_listener(_container_name,
+                                                             _container)
+
+        self.running_apps.append((app_name, _container_name, _container,
+                                  log_thread, stats_thread,
+                                  exit_capture_thread))
 
     def stop_app(self, app_name):
         if not self.redis.app_is_running(app_name):
@@ -239,10 +250,16 @@ class AppExecutorDocker(object):
         _container_name = self.redis.get_app_container(app_name)
         self.log.debug('Killing container: {}'.format(_container_name))
         c = self.docker_client.containers.get(_container_name)
+        c.stop()
         c.remove(force=True)
-        self._send_app_stoped_event(app_name)
-        self.redis.set_app_state(app_name, 0)
-        self.redis.save_db()
+        _aidx = -1
+        for i in range(len(self.running_apps)):
+            if self.running_apps[i][0] == app_name:
+                _aidx = i
+        if _aidx == -1:
+            self._app_exit_handler(app_name, c)
+        else:
+            del self.running_apps[_aidx]
 
     def _run_container(self, image_id, container_name,
                        detach=True, privileged=False):
@@ -261,14 +278,18 @@ class AppExecutorDocker(object):
         self.log.debug('Application Container created!')
         return container
 
-    def _app_exited_handler(self, app_name, container):
-        self._send_app_stoped_event(app_name)
+    def _wait_app_exit(self, app_name, stop_event, container):
+        container.wait()
+        self._app_exit_handler(app_name, container)
+
+    def _app_exit_handler(self, app_name, container):
         self.redis.set_app_state(app_name, 0)
         self.redis.save_db()
         try:
             container.remove()
         except docker.errors.APIError:
             pass
+        self._send_app_stoped_event(app_name)
 
     def _send_app_stoped_event(self, app_name):
         event_uri = self.APP_STOPED_EVENT.replace(
@@ -336,7 +357,51 @@ class AppExecutorDocker(object):
                     break
         except Exception:
             pass
-        self._app_exited_handler(app_name, container)
+
+    def _app_stats_publish_loop(self, app_name, stop_event, container):
+        topic_stats = self.PLATFORM_APP_STATS_TOPIC_TPL.replace(
+                'x', self._device_id).replace(
+                        'y', app_name)
+
+        app_stats_pub = PublisherSync(
+                topic_stats, connection_params=self.platform_params,
+                debug=False)
+
+        self.log.info('Initiated remote platform stats publisher: {}'.format(
+            topic_stats))
+
+        for line in container.stats(
+                container=container_id,
+                decode=True,
+                stream=True):
+            _stats_msg = line.strip().decode('utf-8')
+            app_stats_pub.publish(_stats_msg)
+            if stop_event.is_set():
+                break
+
+    def _detach_app_stats(self, app_name, container):
+        t_stop_event = threading.Event()
+        t = threading.Thread(target=self._app_stats_publish_loop,
+                             args=(app_name, t_stop_event, container))
+        t.daemon = True
+        t.start()
+        app_stats_thread = {
+            'thread': t,
+            'stop_event': t_stop_event
+        }
+        return app_stats_thread
+
+    def _detach_app_exit_listener(self, app_name, container):
+        t_stop_event = threading.Event()
+        t = threading.Thread(target=self._wait_app_exit,
+                             args=(app_name, t_stop_event, container))
+        t.daemon = True
+        t.start()
+        app_exit_thread = {
+            'thread': t,
+            'stop_event': t_stop_event
+        }
+        return app_exit_thread
 
 
 class Application(object):
@@ -407,43 +472,6 @@ class Application(object):
         self._cleanup()
 
 
-
-    def _app_stats_publish_loop(self, app_name, stop_event):
-        topic_stats = self.PLATFORM_APP_STATS_TOPIC_TPL.replace(
-                'x', self.platform_creds.username).replace(
-                        'y', app_name)
-
-        app_stats_pub = PublisherSync(
-                topic_stats, connection_params=self.platform_params,
-                debug=False)
-
-        self.log.info('Initiated remote platform stats publisher: {}'.format(
-            topic_stats))
-        container_id = self.container_id
-        if container_id is None:
-            self.log.error('App with id={} does not exist!')
-            return
-
-        for line in self.docker_client.stats(
-                container=container_id,
-                decode=False,
-                stream=True):
-            _stats_msg = line.strip().decode('utf-8')
-            app_stats_pub.publish(_stats_msg)
-            if stop_event.is_set():
-                break
-
-
-    def _detach_app_stats(self, app_name):
-        t_stop_event = threading.Event()
-        t = threading.Thread(target=self._app_stats_publish_loop,
-                             args=(app_name, t_stop_event))
-        t.daemon = True
-        t.start()
-        self.app_stats_thread = {
-            'thread': t,
-            'stop_event': t_stop_event
-        }
 
     def _read_dockerfile_template(self, fname):
         tpl_path = os.path.join(self.script_dir, 'templates', fname)
