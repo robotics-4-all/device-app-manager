@@ -1,17 +1,42 @@
 # device-app-manager
-Component for remotely deploying Applications on Things
+Component for remotely deploying Applications on Edge Devices.
 
-## Supported Application Deployments
+![AppManagerArchitecture](/assets/img/AppManager.png)
+
+- **Redis DB/Cache**: Uses redis to cache data and store application installations and deployments.
+- **Docker Container Engine**: Applications are deployed in docker containers. This is achieved by
+calling the **docker-ce agent** API to build, run, stop and remove images and containers. It is also
+responsible to attach to proper network(s)m or even to the local host network and pid and ipc namespace, when required.
+
+By viewing the above architecture diagram, someone may think of "Why Redis"? The answer is pretty. We wanted to have as minimal memory footprint that is well tested on end embedded devices, such as Raspberry PIs.
+
+**Note**: For R4A ROS2 Applications it is necessary to attach the application container to the host IPC and PID Namespace. Elsewhere, DDS communication using FastRTPS could not resolve services in localhost. DDS automatically switched to shared memory communication mode when discovering endpoints running on localhost. Because of the fact that docker containers are isolated from the host machine (up to some level and fully configured - net/pid/ipc stack) by default this type of communication (shared memory) could not be resolved.
+
+## Features
+
+Below is the list of features currently supported by the application manager:
+
+- **Get Applications**: Returns the list of installed applications
+- **Get Running Applications**: Returns the list of currently running applications
+- **Install Application**: Nothing to explain here, the functionality is obvious.
+- **Start Application**: Start a previously installed application
+- **Stop Application**: Stop a currently running application
+- **Delete Application**: Delete an application. Does not terminate the currently running
+application instance. Use the **Stop Application** service in case you need such
+functionality.
+
+## Supported Application Types
 
 ### Python3 Application
 
-This kind of application is not stored locally and it is destroyed after
-execution.
+Can be any Python3 Application. Use the `requirements.txt` file to define python package dependencies to be installed.
 
 Tarball contents:
 
 - `app.py`: python executable
 - `requirements.txt`: python package dependencies file
+
+**Keyword**: `py3`
 
 ### R4A Python3 Application
 
@@ -23,6 +48,8 @@ Tarball contents:
 - `app.info`: Gives information of the application
 - `exec.conf`: Scheduling parameters and stored here. This file is used by the
   application scheduler.
+
+**Keyword**: `r4a_ros2_py`
 
 Example `init.conf`:
 
@@ -48,6 +75,7 @@ Example `app.info`:
 ```yaml
 name: <string>
 version: <string>
+type: "r4a_ros2_py"
 elsa_version: <string>
 description: <string>
 tags: <array_of_strings>
@@ -92,89 +120,56 @@ optional arguments:
 
 **NOTE**: Username defines the unique id of the device (`{thing_id}`).
 
+### Configuration
+
+The Application manager daemon can be fully configured via a configuration file,
+located at `~/.config/device_app_manager/config`.
+
+A sample configuration file can be found at this repo under the [examples](https://github.com/robotics-4-all/device-app-manager/edit/devel/README.md) directory.
+
+```ini
+[core]
+debug = 0
+deployment_basedir = /tmp/r4a-apps
+
+[platform_control_interfaces]
+app_install_rpc_name = thing.x.appmanager.install_app
+app_delete_rpc_name = thing.x.appmanager.delete_app
+app_list_rpc_name = thing.x.appmanager.apps
+get_running_apps_rpc_name = thing.x.appmanager.apps.running
+app_start_rpc_name = thing.x.appmanager.start_app
+app_stop_rpc_name = thing.x.appmanager.stop_app
+is_alive_rpc_name = thing.x.appmanager.is_alive
+
+[platform_monitoring_interfaces]
+heartbeat_interval = 10
+heartbeat_topic = thing.x.appmanager.heartbeat
+connected_event_name = thing.x.appmanager.connected
+disconnected_event_name = thing.x.appmanager.disconnected
+
+[platform]
+host = r4a-platform.ddns.net
+port = 5672
+vhost = /
+rpc_exchange = DEFAULT
+topic_exchange = amq.topic
+username = device3
+password = device3
+
+[redis]
+host = localhost
+port = 6379
+database = 0
+password =
+app_list_name = appmanager.apps
+```
 
 ### Examples
+Examples are provided in the **examples** directory of this repository.
 
-#### Get Running Applications Example
+We provide an example for each, provided by the application manager, interface.
 
-Returns a list of the installed applications.
-
-Usage example:
-
-```bash
-./get_running_apps.py \
-    --device-id device2 \
-    --host r4a-platform.ddns.net \
-    --port 5782 \
-    --vhost / \
-    --debug \
-```
-
-#### Get Applications Example
-
-Returns a list of the installed applications.
-
-Usage example:
-
-```bash
-./get_apps.py \
-    --device-id device2 \
-    --host r4a-platform.ddns.net \
-    --port 5782 \
-    --vhost / \
-    --debug \
-```
-
-#### Start Application Example
-
-An example demonstrating application deployment call can be found in
-`examlles/` examples folder.
-
-Usage example:
-
-```bash
-./start_app.py \
-    --app-id test-app
-    --device-id device2 \
-    --host r4a-platform.ddns.net \
-    --port 5782 \
-    --vhost / \
-    --debug \
-```
-
-#### Stop Application Example
-
-An example demonstrating application kill call can be found in
-`examlles/` examples folder.
-
-Usage example:
-
-```bash
-./stop_app.py \
-    --app-id test-app \
-    --device-id device2 \
-    --host r4a-platform.ddns.net \
-    --port 5782 \
-    --vhost / \
-    --debug
-```
-
-#### Download Application Example
-
-Usage example:
-
-```bash
-./download_app.py		  \
-    --device-id device2		  \
-    --fpath app.tar.gz		  \
-    --app-type r4a_ros2_py	  \
-    --host r4a-platform.ddns.net  \
-    --port 5782			  \
-    --vhost /			  \
-    --debug			  \
-```
-
-## Application Manager Endpoints
+## Application Manager Platform Control Interfaces
 
 ### RPC Endpoints
 
@@ -198,8 +193,23 @@ Returns the list of currently running applications.
 ```
 {
   "status": <200/404>,
-  "apps": [<list_of_apps>],
+  "apps": [<app>],
   "error": "<error_message>"
+}
+```
+
+where `app` has the following schema:
+
+```
+{
+  "name": "test",
+  "state": 0,
+  "type": "py3",
+  "tarball_path": "/home/klpanagi/.apps/app-bf881071.tar.gz",
+  "docker_image": "test",
+  "docker_container": {"name": "", "id": ""},
+  "create_at": 1585761177,
+  "updated_at": 1585761226
 }
 ```
 
@@ -222,23 +232,41 @@ Returns the list of installed applications.
 ```
 {
   "status": <200/404>,
-  "apps": [<list_of_apps>],
+  "apps": [<app>],
   "error": "<error_message>"
 }
 ```
 
-#### Download Application Service
+where `app` has the following schema:
 
-A service call will download and install the input app.
+```
+{
+  "name": "test",
+  "state": 0,
+  "type": "py3",
+  "docker_image": "test",
+  "docker_container": {"name": "", "id": ""},
+  "create_at": 1585761177,
+  "updated_at": 1585761226
+}
+```
 
-**URI**: `thing.{thing_id}.appmanager.download_app`
+#### Install Application Service
+
+A service call will install and install the input app.
+
+Supported Applications are:
+- `py3`: Simple Python3 Application
+- `r4a_ros2_py`: R4A ROS2 Application
+
+**URI**: `thing.{thing_id}.appmanager.install_app`
 
 **DataModel**:
   - Input:
 ```
 {
   "app_id": "<application_unique_id>",
-  "app_type": <py3/r4a_ros2_py>,
+  "app_type": <r4a_ros2_py>,
   "app_tarball": <BASE64_ENCODED_TARBALL>
 }
 ```
@@ -335,7 +363,10 @@ also check the state by validating existence of the various service queues.
   - Input: `{}`
   - Output: `{}`
 
-### Publish Endpoints
+### Platform Monitoring Interfaces
+
+These outbound platform monitoring interfaces pushes information from the Edge to the Cloud.
+These are Publishers pushing data to an AMQP message broker.
 
 All Publish Endpoints are binded to the `amq.topic` exchange by default.
 
@@ -363,6 +394,7 @@ Each application deployment creates a series of endpoints.
 Sends application logs captured from stdout and stderr to a topic.
 
 **URI**: `thing.{thing_id}.app.{app_id}.logs`
+
 **DataModel**:
 ```
 {
@@ -376,6 +408,7 @@ Sends application logs captured from stdout and stderr to a topic.
 Sends runtime stats.
 
 **URI**: `thing.{thing_id}.app.{app_id}.stats`
+
 **DataModel**:
 ```
 {
@@ -383,9 +416,25 @@ Sends runtime stats.
 }
 ```
 
-#### AppStarted Event
+#### Application Started Event
 
 Fires once, on application launch.
 
 **URI**: `thing.{thing_id}.app.{app_id}.started`
+
 **DataModel**: `{}`
+
+
+#### Application Stopped Event
+
+Fires once, on application termination.
+
+**URI**: `thing.{thing_id}.app.{app_id}.stopped`
+
+**DataModel**: `{}`
+
+
+## Considerations
+
+- Investigate other container engines or builds that are effective for low-processing devices.
+  - [BalenaEngine](https://github.com/balena-os/balena-engine)

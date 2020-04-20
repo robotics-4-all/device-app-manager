@@ -39,7 +39,7 @@ if __name__ == "__main__":
         type=str, default='')
     parser.add_argument(
         '--rpc-name', dest='rpc_name', help='The URI of the RPC endpoint',
-        type=str, default='thing.{}.appmanager.download_app')
+        type=str, default='thing.{}.appmanager.install_app')
     parser.add_argument(
         '--host',
         dest='host',

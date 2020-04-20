@@ -39,3 +39,6 @@ class RedisStore(MutableMapping):
 
     def clear(self):
         self._store.flushdb()
+
+    def save(self):
+        self._store.bgsave()

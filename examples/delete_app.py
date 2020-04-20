@@ -14,34 +14,24 @@ import argparse
 import amqp_common
 
 
-class AppDeployMessage(amqp_common.Message):
-    __slots__ = ['header', 'app_tarball', 'app_type']
-
-    def __init__(self, app_tarball_fmsg, app_type):
-        self.header = amqp_common.HeaderMessage()
-        self.app_tarball = app_tarball_fmsg
-        self.app_type = app_type
-
-
-class AppKillMessage(amqp_common.Message):
-    __slots__ = ['header', 'app_id']
+class AppStartMessage(amqp_common.Message):
+    __slots__ = ['app_id']
 
     def __init__(self, app_id):
-        self.header = amqp_common.HeaderMessage()
         self.app_id = app_id
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='AMQP RPC Client CLI.')
+    parser = argparse.ArgumentParser(description='Delete Application CLI.')
     parser.add_argument(
         '--device-id', dest='device_id', help='UID of the device',
         type=str, default='')
     parser.add_argument(
-        '--app-name', dest='app_name', help='Application Name',
+        '--app-id', dest='app_id', help='Application ID/Name',
         type=str, default='')
     parser.add_argument(
         '--rpc-name', dest='rpc_name', help='The URI of the RPC endpoint',
-        type=str, default='thing.{}.appmanager.start_app')
+        type=str, default='thing.{}.appmanager.delete_app')
     parser.add_argument(
         '--host',
         dest='host',
@@ -82,8 +72,7 @@ if __name__ == "__main__":
     username = args.username
     password = args.password
     device_id = args.device_id
-    fpath = args.fpath
-    app_type = args.app_type
+    app_id = args.app_id
     rpc_name = args.rpc_name
     debug = True if args.debug else False
 
@@ -92,10 +81,8 @@ if __name__ == "__main__":
     conn_params.credentials = amqp_common.Credentials(username, password)
 
     rpc_name = rpc_name.format(device_id)
-    rpc_client = amqp_common.RpcClient(rpc_name, connection=conn)
-    fmsg = amqp_common.FileMessage()
-    fmsg.load_from_file(fpath)
-    msg = AppDeployMessage(fmsg, app_type)
+    rpc_client = amqp_common.RpcClient(rpc_name, connection_params=conn_params)
+    msg = AppStartMessage(app_id)
 
     rpc_client.debug = True
     resp = rpc_client.call(msg.serialize_json(), timeout=30)
