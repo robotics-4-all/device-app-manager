@@ -150,20 +150,21 @@ class AppManager(object):
                                      redis_password,
                                      app_list_name=redis_app_list_name)
         self.app_builder = AppBuilderDocker()
-
+        self.app_executor = AppExecutorDocker(
+            redis_host, redis_port, redis_db, redis_password,
+            redis_app_list_name=redis_app_list_name
+        )
     def install_app(self, app_name, app_type, app_tarball_path):
-        # app_d = self._get_app_object(app_name, app_type)
-        # app_d.build(app_tarball_path)
-        self.app_builder.build_app(app_name, app_type, app_tarball_path)
-        return
+        _app = self.app_builder.build_app(app_name, app_type, app_tarball_path)
+
         if self.redis.app_exists(app_name):
             ## Updating app
             self.log.info('Updating App in DB: <{}>'.format(app_name))
-            self.redis.update_app(app_d._serialize())
+            self.redis.update_app(_app.serialize())
         else:
             ## Creating new app instance in db
             self.log.info('Storing new App in DB: <{}>'.format(app_name))
-            self.redis.add_app(app_d._serialize())
+            self.redis.add_app(_app.serialize())
 
         self.redis.save_db()
         return app_name
@@ -173,8 +174,9 @@ class AppManager(object):
             raise ValueError('App does not exist locally')
         app = self.redis.get_app(app_name)
 
-        app_d = self._get_app_object(app_name, app['type'])
-        app_d.stop()
+        if self.redis.app_is_running(app_name):
+            self.log.info('Stoping App before deleting')
+            ## TODO!!
 
         self.log.info('Deleting Application <{}>'.format(app_name))
         self.redis.delete_app(app_name)
@@ -193,32 +195,13 @@ class AppManager(object):
         if app['state'] == 1:
             raise ValueError('Application is allready running.')
 
-        app_d = self._get_app_object(app_name, app['type'])
-
-        app_d.deploy()
-
-        self.redis.set_app_state(app_name, 1)
-        self.redis.set_app_property(app_name, 'docker_container',
-                                    {'name': app_d.container_name,
-                                     'id': app_d.container_id})
-
-        ## Save db in hdd
-        try:
-            self.redis.save_db()
-        except redis.exceptions.ResponseError:
-            ## redis.exceptions.ResponseError: Background save already in progress
-            pass
+        self.app_executor.run_app(app_name)
         return app_name
 
     def stop_app(self, app_name):
-        app = self.redis.get_app(app_name)
-
-        app_d = self._get_app_object(app_name, app['type'])
-        app_d.stop()
-
-        self.redis.set_app_state(app_name, 0)
-        self.redis.save_db()
-
+        if not self.redis.app_exists(app_name):
+            raise ValueError('App does not exist locally')
+        self.app_executor.stop_app(app_name)
         self.log.info('App {} stopped!'.format(app_name))
 
     def get_apps(self):
@@ -248,10 +231,10 @@ class AppManager(object):
         if self._deploy_rpc:
             self._deploy_rpc.stop()
 
-        apps = self.redis.get_apps()
-        app_idx = 0
-        for app in apps:
-            self.redis.set_app_state(app['name'], 0)
+        # apps = self.redis.get_apps()
+        # app_idx = 0
+        # for app in apps:
+        #     self.redis.set_app_state(app['name'], 0)
 
     def _create_app_storage_dir(self):
         if not os.path.exists(self.APP_STORAGE_DIR):
@@ -509,33 +492,6 @@ class AppManager(object):
         p.publish({})
         p.close()
         del p
-
-    def _get_app_object(self, app_name, app_type):
-        # Add here more deployment options.
-        # TODO: The way deployment definition works much change to module-based.
-        # Generalize the way so that it is easier to maintain extentions.
-        if app_type == 'py3':
-            app_deployment = AppPython3(
-                self.broker_conn_params,
-                app_name,
-                redis_host=self.REDIS_HOST,
-                redis_port=self.REDIS_PORT,
-                redis_db=self.REDIS_DB,
-                redis_password=self.REDIS_PASSWORD,
-                redis_app_list_name=self.REDIS_APP_LIST_NAME)
-        elif app_type == 'r4a_ros2_py':
-            app_deployment = AppR4AROS2Py(
-                self.broker_conn_params,
-                app_name,
-                redis_host=self.REDIS_HOST,
-                redis_port=self.REDIS_PORT,
-                redis_db=self.REDIS_DB,
-                redis_password=self.REDIS_PASSWORD,
-                redis_app_list_name=self.REDIS_APP_LIST_NAME)
-        else:
-            raise TypeError(
-                'Application type <{}> not supported'.format(app_type))
-        return app_deployment
 
     def _store_app_tar(self, tar_b64, dest_dir):
         tarball_decoded = base64.b64decode(tar_b64)

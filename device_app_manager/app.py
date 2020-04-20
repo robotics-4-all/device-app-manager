@@ -13,6 +13,7 @@ import tarfile
 import threading
 import json
 import enum
+from collections import namedtuple
 
 from jinja2 import Template, Environment, PackageLoader, select_autoescape
 
@@ -42,7 +43,7 @@ class AppType(enum.Enum):
 
 class AppModel(object):
 
-    def __init__(self, name=None, app_type=None, state=None,
+    def __init__(self, name=None, app_type=None, state=0,
                  docker_image_name=None, docker_container_id=None,
                  docker_container_name=None):
         self.name = name
@@ -51,15 +52,31 @@ class AppModel(object):
         self.docker_image_name = docker_image_name
         self.docker_container_id = docker_container_id
         self.docker_container_name = docker_container_name
+        self.created_at = -1
+        self.updated_at = -1
+
+    @property
+    def docker(self):
+        return {
+            'image': {
+                'name': self.docker_image_name
+            },
+            'container': {
+                'name': self.docker_container_name,
+                'id': self.docker_container_id
+            }
+        }
 
     def serialize(self):
         _d = {
             'name': self.name,
             'type': self.app_type,
             'state': self.state,
+            'created_at': self.created_at,
+            'updated_at': self.updated_at,
             'docker': {
                 'image': {
-                    self.docker_image_name
+                    'name': self.docker_image_name
                 },
                 'container': {
                     'name': self.docker_container_name,
@@ -77,7 +94,8 @@ class AppBuilderDocker(object):
     DOCKER_DAEMON_URL = 'unix://var/run/docker.sock'
     IMAGE_NAME_PREFIX = 'app'
 
-    def __init__(self):
+    def __init__(self, image_prefix='app'):
+        self.IMAGE_NAME_PREFIX = image_prefix
         self.docker_client = docker.from_env()
         self.docker_cli = docker.APIClient(base_url=self.DOCKER_DAEMON_URL)
         self.__init_logger()
@@ -93,6 +111,8 @@ class AppBuilderDocker(object):
         image_name = '{}-{}'.format(self.IMAGE_NAME_PREFIX, app_name)
         app_dir = self._prepare_build(app_name, app_type, app_tarball_path)
         self._build_image(app_dir, image_name)
+        _app = AppModel(app_name, app_type, docker_image_name=image_name)
+        return _app
 
     def __init_logger(self):
         """Initialize Logger."""
@@ -100,7 +120,6 @@ class AppBuilderDocker(object):
 
     def _build_image(self, app_dir, image_name):
         self.log.debug('[*] - Building image {} ...'.format(image_name))
-        print(app_dir)
         try:
             image, logs = self.docker_client.images.build(
                 path=app_dir,
@@ -175,15 +194,70 @@ class AppBuilderDocker(object):
 
 
 class AppExecutorDocker(object):
-    def __init__(self, app_name, app_type):
-        pass
-
-
-class Application(object):
+    DOCKER_DAEMON_URL = 'unix://var/run/docker.sock'
     PLATFORM_APP_LOGS_TOPIC_TPL = 'thing.x.app.y.logs'
     PLATFORM_APP_STATS_TOPIC_TPL = 'thing.x.app.y.stats'
     APP_STARTED_EVENT = 'thing.x.app.y.started'
     APP_STOPED_EVENT = 'thing.x.app.y.stoped'
+
+    def __init__(self, redis_host='localhost', redis_port=6379,
+                 redis_db=0, redis_password=None,
+                 redis_app_list_name='appmanager.apps'):
+        self.docker_client = docker.from_env()
+        self.docker_cli = docker.APIClient(base_url=self.DOCKER_DAEMON_URL)
+        self.__init_logger()
+        self.redis = RedisController(redis_host, redis_port, redis_db,
+                                     redis_password,
+                                     app_list_name=redis_app_list_name)
+        self.running_apps = []  # Array of tuples (app_name, container_name)
+
+    def __init_logger(self):
+        """Initialize Logger."""
+        self.log = create_logger(self.__class__.__name__)
+
+    def run_app(self, app_name):
+        image_id = self.redis.get_app_image(app_name)
+        _container_name = app_name
+        _container = self._run_container(image_id, _container_name)
+        self.redis.set_app_state(app_name, 1)
+        self.redis.set_app_container(app_name, _container_name, _container.id)
+        self.running_apps.append((app_name, _container_name))
+        self.redis.save_db()
+
+    def stop_app(self, app_name):
+        if not self.redis.app_is_running(app_name):
+            raise ValueError('Application is not running')
+        _container_name = self.redis.get_app_container(app_name)
+        self.log.debug('Killing container: {}'.format(_container_name))
+        c = self.docker_client.containers.get(_container_name)
+        c.remove(force=True)
+        self.redis.set_app_state(app_name, 0)
+        self.redis.save_db()
+
+    def _run_container(self, image_id, container_name,
+                       detach=True, privileged=False):
+        container = self.docker_client.containers.run(
+            image_id,
+            name=container_name,
+            detach=detach,
+            auto_remove=True,
+            # network='host',
+            network_mode='host',
+            ipc_mode='host',
+            pid_mode='host',
+            # publish_all_ports=True,
+            remove=True
+        )
+        self.log.debug('[*] - Container created!')
+
+        # if self.remote_logging:
+        #     self._detach_app_logging(container_name)
+        # if self.send_app_stats:
+        #     self._detach_app_stats(container_name)
+        return container
+
+
+class Application(object):
     IMAGE = 'python:3.7-alpine'
     REDIS_APP_LIST_NAME = 'appmanager.apps'
 
@@ -247,52 +321,9 @@ class Application(object):
         self.app_log_thread = None
 
 
-    def _load_app_info_from_db(self):
-        _app = self.redis.get_app(self.app_name)
-        # self.app_type = _app['type']
-        self.app_state = _app['state']
-        self.app_tar_path = _app['tarball_path']
-        self.image_id = _app['docker_image']
-        self.container_name = _app['docker_container']
-
-
-    def deploy(self):
-        _ = self.run_container(self.image_id, self.container_name)
-        return self.container_name, self.container_id
-
-    def run_container(
-            self,
-            image_id,
-            deployment_id,
-            detach=True,
-            privileged=False
-    ):
-        container = self.docker_client.containers.run(
-            image_id,
-            name=deployment_id,
-            detach=detach,
-            # auto_remove=True,
-            # network='host',
-            network_mode='host',
-            ipc_mode='host',
-            pid_mode='host',
-            # publish_all_ports=True,
-            # remove=True
-        )
-        self.log.debug('[*] - Container created!')
-        self.container = container
-        self.container_id = container.id
-
-        if self.remote_logging:
-            self._detach_app_logging(deployment_id)
-        if self.send_app_stats:
-            self._detach_app_stats(deployment_id)
-
     def stop(self):
         self._send_appstoped_event(self.app_name)
         self._cleanup()
-
-
 
     def _send_appstarted_event(self, app_name):
         event_uri = self.APP_STARTED_EVENT.replace(

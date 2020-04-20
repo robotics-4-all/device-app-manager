@@ -77,7 +77,12 @@ class RedisController(object):
         )
 
     def save_db(self):
-        self.redis.bgsave()
+        try:
+            self.redis.bgsave()
+        except redis.exceptions.ResponseError:
+            # redis.exceptions.ResponseError:
+            # Background save already in progress
+            pass
 
     def get_apps(self):
         apps = self.redis.lrange(self.APP_LIST_NAME, 0, -1)
@@ -103,7 +108,7 @@ class RedisController(object):
     def add_app(self, app):
         ## TODO: Validate somehow the schema of app
         created_at = int(time.time())
-        app['create_at'] = created_at
+        app['created_at'] = created_at
         app['updated_at'] = -1
         self.redis.lpush(
             self.APP_LIST_NAME, json.dumps(app))
@@ -115,9 +120,7 @@ class RedisController(object):
         app_index = self._get_app_index(app['name'])
 
         _app['type'] = app['type']
-        _app['tarball_path'] = app['tarball_path']
-        _app['docker_image'] = app['docker_image']
-
+        _app['docker'] = app['docker']
         _app['updated_at'] = int(time.time())
 
         self.redis.lset(
@@ -139,7 +142,7 @@ class RedisController(object):
         app = self.get_app(app_name)
         app['state'] = state
         if state == 0:
-            app['docker_container'] = {
+            app['docker']['container'] = {
                 'name': '',
                 'id': ''
             }
@@ -155,6 +158,37 @@ class RedisController(object):
         self.redis.lset(self.APP_LIST_NAME, app_index, json.dumps(app))
         if self.auto_save:
             self.save_db()
+
+    def app_is_running(self, app_name):
+        app = self.get_app(app_name)
+        if app['state'] == 1:
+            return True
+        return False
+
+    def get_app_image(self, app_name):
+        _app = self.get_app(app_name)
+        return _app['docker']['image']['name']
+
+    def get_app_container(self, app_name):
+        _app = self.get_app(app_name)
+        return _app['docker']['container']['id']
+
+    def set_app_container(self, app_name, container_name, container_id):
+        _app = self.get_app(app_name)
+        _app['docker']['container']['name'] = container_name
+        _app['docker']['container']['id'] = container_id
+        app_index = self._get_app_index(app_name)
+        self.redis.lset(self.APP_LIST_NAME, app_index, json.dumps(_app))
+        if self.auto_save:
+            self.save_db()
+
+    def get_running_apps(self):
+        apps = self.get_apps()
+        _r_apps = []
+        for app in apps:
+            if app['state'] == 1:
+                _r_apps.append(app)
+        return _r_apps
 
     def _get_app_index(self, app_name):
         apps = self.get_apps()
