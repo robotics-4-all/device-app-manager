@@ -5,11 +5,30 @@ from __future__ import (
     unicode_literals
 )
 
-from redis import Redis
+from redis import Redis, exceptions
 from collections import MutableMapping
 from pickle import loads, dumps
 import json
 import time
+
+
+class RedisConnectionParams(object):
+    __slots__ = ['host', 'port', 'db', 'password']
+
+    def __init__(self, **kwargs):
+        self.host = 'localhost'
+        self.port = 6379
+        self.db = 0
+        self.password = None
+
+        if 'host' in kwargs:
+            self.host = kwargs.pop('host')
+        if 'port' in kwargs:
+            self.port = kwargs.pop('port')
+        if 'db' in kwargs:
+            self.db = kwargs.pop('db')
+        if 'password' in kwargs:
+            self.password = kwargs.pop('password')
 
 
 class RedisStore(MutableMapping):
@@ -56,22 +75,18 @@ class RedisStore(MutableMapping):
 class RedisController(object):
     APP_LIST_NAME = 'appmanager.apps'
 
-    def __init__(self, host='localhost', port=6379, db=0,
-                 password=None, app_list_name=None, auto_save=False):
-        self.host = host
-        self.port = port
-        self.db = db
-        self.password = password
+    def __init__(self, conn_params, app_list_name=None, auto_save=False):
+        self.conn_params = conn_params
         self.auto_save = auto_save
 
         if app_list_name is not None:
             self.APP_LIST_NAME = app_list_name
 
         self.redis = Redis(
-            host=host,
-            port=port,
-            db=db,
-            password=password,
+            host=conn_params.host,
+            port=conn_params.port,
+            db=conn_params.db,
+            password=conn_params.password,
             decode_responses=True,
             charset="utf-8"
         )
@@ -79,7 +94,7 @@ class RedisController(object):
     def save_db(self):
         try:
             self.redis.bgsave()
-        except redis.exceptions.ResponseError:
+        except exceptions.ResponseError:
             # redis.exceptions.ResponseError:
             # Background save already in progress
             pass

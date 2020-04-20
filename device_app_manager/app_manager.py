@@ -30,7 +30,7 @@ from amqp_common import (
 
 from ._logging import create_logger, enable_debug, disable_debug
 from .app import *
-from .redis_controller import RedisController
+from .redis_controller import RedisController, RedisConnectionParams
 
 
 class RemoteLogger(object):
@@ -145,15 +145,25 @@ class AppManager(object):
         self.__init_logger()
         self.debug = debug
 
+        self._init_platform_params()
+
+        redis_params = RedisConnectionParams(
+            host=redis_host,
+            port=redis_port,
+            db=redis_db,
+            password=redis_password,
+        )
+
         self._create_app_storage_dir()
-        self.redis = RedisController(redis_host, redis_port, redis_db,
-                                     redis_password,
-                                     app_list_name=redis_app_list_name)
+
+        self.redis = RedisController(redis_params)
         self.app_builder = AppBuilderDocker()
         self.app_executor = AppExecutorDocker(
-            redis_host, redis_port, redis_db, redis_password,
+            self.broker_conn_params,
+            redis_params,
             redis_app_list_name=redis_app_list_name
         )
+
     def install_app(self, app_name, app_type, app_tarball_path):
         _app = self.app_builder.build_app(app_name, app_type, app_tarball_path)
 
@@ -505,7 +515,6 @@ class AppManager(object):
             return tarball_path
     def run(self):
         try:
-            self._init_platform_params()
             self._init_rpc_endpoints()
             self._init_heartbeat_pub()
             self._send_connected_event()
