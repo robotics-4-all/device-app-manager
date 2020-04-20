@@ -251,7 +251,6 @@ class AppExecutorDocker(object):
         self.log.debug('Killing container: {}'.format(_container_name))
         c = self.docker_client.containers.get(_container_name)
         c.stop()
-        c.remove(force=True)
         _aidx = -1
         for i in range(len(self.running_apps)):
             if self.running_apps[i][0] == app_name:
@@ -286,7 +285,7 @@ class AppExecutorDocker(object):
         self.redis.set_app_state(app_name, 0)
         self.redis.save_db()
         try:
-            container.remove()
+            container.remove(force=True)
         except docker.errors.APIError:
             pass
         self._send_app_stoped_event(app_name)
