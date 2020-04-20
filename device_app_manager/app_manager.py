@@ -149,10 +149,13 @@ class AppManager(object):
         self.redis = RedisController(redis_host, redis_port, redis_db,
                                      redis_password,
                                      app_list_name=redis_app_list_name)
+        self.app_builder = AppBuilderDocker()
 
     def install_app(self, app_name, app_type, app_tarball_path):
-        app_d = self._get_app_object(app_name, app_type)
-        app_d.build(app_tarball_path)
+        # app_d = self._get_app_object(app_name, app_type)
+        # app_d.build(app_tarball_path)
+        self.app_builder.build_app(app_name, app_type, app_tarball_path)
+        return
         if self.redis.app_exists(app_name):
             ## Updating app
             self.log.info('Updating App in DB: <{}>'.format(app_name))

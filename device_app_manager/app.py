@@ -12,8 +12,9 @@ import atexit
 import tarfile
 import threading
 import json
+import enum
 
-from jinja2 import Template
+from jinja2 import Template, Environment, PackageLoader, select_autoescape
 
 from ._logging import create_logger
 from .redis_controller import RedisController
@@ -26,27 +27,171 @@ from amqp_common import (
 )
 
 
+DOCKERFILE_TPL_MAP = {
+    'py3': 'Dockerfile.py3.tpl',
+    'r4a_ros2_py': 'Dockerfile.r4a_ros2_py.tpl',
+    # 'ros2_package': 'Dockerfile.ros2_package.tpl'  ## Not yet supported
+}
+
+
+
+class AppType(enum.Enum):
+    py3 = 1
+    r4a_ros2_py = 2
+
+
+class AppModel(object):
+
+    def __init__(self, name=None, app_type=None, state=None,
+                 docker_image_name=None, docker_container_id=None,
+                 docker_container_name=None):
+        self.name = name
+        self.app_type = app_type
+        self.state = state
+        self.docker_image_name = docker_image_name
+        self.docker_container_id = docker_container_id
+        self.docker_container_name = docker_container_name
+
+    def serialize(self):
+        _d = {
+            'name': self.name,
+            'type': self.app_type,
+            'state': self.state,
+            'docker': {
+                'image': {
+                    self.docker_image_name
+                },
+                'container': {
+                    'name': self.docker_container_name,
+                    'id': self.docker_container_id
+                }
+            }
+        }
+        return _d
+
+
+class AppBuilderDocker(object):
+    BUILD_TMP_DIR = '/tmp/app-manager/apps/'
+    APP_DEST_DIR = '/app'
+    APP_SRC_DIR = './app'
+    DOCKER_DAEMON_URL = 'unix://var/run/docker.sock'
+    IMAGE_NAME_PREFIX = 'app'
+
+    def __init__(self):
+        self.docker_client = docker.from_env()
+        self.docker_cli = docker.APIClient(base_url=self.DOCKER_DAEMON_URL)
+        self.__init_logger()
+        self._dockerfile_templates = {}
+        self._jinja_env = Environment(
+            loader=PackageLoader('device_app_manager', 'templates'),
+            autoescape=select_autoescape(['tpl', 'Dockerfile'])
+        )
+        self._load_app_templates()
+
+    def build_app(self, app_name, app_type, app_tarball_path):
+        ## Adds a prefix to create docker image tag.
+        image_name = '{}-{}'.format(self.IMAGE_NAME_PREFIX, app_name)
+        app_dir = self._prepare_build(app_name, app_type, app_tarball_path)
+        self._build_image(app_dir, image_name)
+
+    def __init_logger(self):
+        """Initialize Logger."""
+        self.log = create_logger(self.__class__.__name__)
+
+    def _build_image(self, app_dir, image_name):
+        self.log.debug('[*] - Building image {} ...'.format(image_name))
+        print(app_dir)
+        try:
+            image, logs = self.docker_client.images.build(
+                path=app_dir,
+                tag=image_name,
+                rm=True,
+                forcerm=True
+            )
+            for l in logs:
+                self.log.debug(l)
+        except docker.errors.BuildError as e:
+            self.log.error('Build for application <{}> failed!'.format(
+                image_name))
+            for line in e.build_log:
+                if 'stream' in line:
+                    self.log.error(line['stream'].strip())
+            raise e
+
+    def _prepare_build(self, app_name, app_type, app_tarball_path=None):
+        # Validate Application type
+        if app_type not in DOCKERFILE_TPL_MAP:
+            raise ValueError('Application type not supported!')
+
+        app_tmp_dir = os.path.join(self.BUILD_TMP_DIR,
+                               app_name)
+
+        # Create temp dir if it does not exist
+        if not os.path.exists(app_tmp_dir):
+            os.makedirs(app_tmp_dir, exist_ok=True)
+
+        app_src_dir = os.path.join(app_tmp_dir, 'app')
+        ## Create Application Dockerfile.
+        ##  - app/
+        ##  - Dockerfile
+        dockerfile_path = os.path.join(app_tmp_dir, 'Dockerfile')
+
+        self._untar_app(app_tarball_path, app_src_dir)
+        self._create_dockerfile(app_type, self.APP_SRC_DIR, dockerfile_path)
+        return app_tmp_dir
+
+    def _create_dockerfile(self, app_type, app_src_dir, dest_path):
+        _tpl = self._dockerfile_templates[app_type]
+        dockerfile = _tpl.render(
+            app_src_dir=app_src_dir,
+            app_dest_dir=self.APP_DEST_DIR
+            )
+        with open(dest_path, 'w') as fp:
+            fp.write(dockerfile)
+
+    def _untar_app(self, tarball_path, dest_path):
+        self.log.debug(
+            '[*] - Decompressing application tarball <{}> ...'.format(
+                tarball_path)
+        )
+        if tarball_path.endswith('tar.gz'):
+            tar = tarfile.open(tarball_path)
+            tar.extractall(dest_path)
+            tar.close()
+        else:
+            raise ValueError('Not a tarball')
+
+    def _load_app_templates(self):
+        _current_dir = os.path.dirname(os.path.abspath(__file__))
+        _templates_dir = os.path.join(_current_dir, 'templates')
+        for key in DOCKERFILE_TPL_MAP:
+            _tplpath = os.path.join(_templates_dir,DOCKERFILE_TPL_MAP[key])
+            if os.path.isfile(_tplpath):
+                self.log.info(
+                    'Loading Application Template for type {}'.format(key))
+                # self.dockerfile_templates['key'] = Template(_tplpath)
+                _tpl = self._jinja_env.get_template(DOCKERFILE_TPL_MAP[key])
+                self._dockerfile_templates[key] = _tpl
+
+
+class AppExecutorDocker(object):
+    def __init__(self, app_name, app_type):
+        pass
+
+
 class Application(object):
-    APP_TYPE = 'py3'
     PLATFORM_APP_LOGS_TOPIC_TPL = 'thing.x.app.y.logs'
     PLATFORM_APP_STATS_TOPIC_TPL = 'thing.x.app.y.stats'
     APP_STARTED_EVENT = 'thing.x.app.y.started'
     APP_STOPED_EVENT = 'thing.x.app.y.stoped'
-    TMP_DIR = '/tmp/app-deployments'
     IMAGE = 'python:3.7-alpine'
-    APP_DEST_DIR = '/app'
-    APP_SRC_DIR = './app'
-    TMP_DIR = '/tmp/app-deployments'
-    # If set to tcp can deploy remotely
-    DOCKER_DAEMONN_URL = 'unix://var/run/docker.sock'
     REDIS_APP_LIST_NAME = 'appmanager.apps'
 
     def __init__(
         self,
-        platform_params,
         app_name,
-        group=None,
-        target=None,
+        app_type,
+        platform_params,
         name=None,
         verbose=None,
         remote_logging=True,
@@ -58,7 +203,7 @@ class Application(object):
         redis_app_list_name='appmanager.apps'
     ):
 
-        self.app_type = self.APP_TYPE
+        self.app_type = app_type
         self.app_name = app_name
         self.app_state = None
         self.app_tar_path = None
@@ -101,8 +246,6 @@ class Application(object):
         self.app_stats_thread = None
         self.app_log_thread = None
 
-        self.docker_client = docker.from_env()
-        self.docker_cli = docker.APIClient(base_url='unix://var/run/docker.sock')
 
     def _load_app_info_from_db(self):
         _app = self.redis.get_app(self.app_name)
@@ -112,25 +255,6 @@ class Application(object):
         self.image_id = _app['docker_image']
         self.container_name = _app['docker_container']
 
-    def build(self, app_tarball_path=None):
-        tmp_dir = os.path.join(self.TMP_DIR,
-                               self.app_name)
-
-        # Create temp dir if it does not exist
-        if not os.path.exists(tmp_dir):
-            os.makedirs(tmp_dir, exist_ok=True)
-
-        app_src_dir = os.path.join(tmp_dir, 'app')
-        dockerfile_path = os.path.join(tmp_dir, 'Dockerfile')
-
-        self._untar(app_tarball_path, app_src_dir)
-        self._create_dockerfile_from_tpl(self.APP_SRC_DIR,
-                                         self.dockerfile_tpl,
-                                         dockerfile_path)
-        self._build_image(tmp_dir, self.image_id)
-        if app_tarball_path is not None:
-            self.app_tar_path = app_tarball_path
-        return self.image_id
 
     def deploy(self):
         _ = self.run_container(self.image_id, self.container_name)
@@ -168,48 +292,7 @@ class Application(object):
         self._send_appstoped_event(self.app_name)
         self._cleanup()
 
-    def __init_logger(self):
-        """Initialize Logger."""
-        self.log = create_logger(
-            self.__class__.__name__ + '-' + self.app_name)
 
-    def _create_dockerfile_from_tpl(self, app_src_dir, tpl_path, dest_path):
-        tpl = Template(tpl_path)
-        dockerfile = tpl.render(
-            image=self.IMAGE,
-            app_src_dir=app_src_dir,
-            app_dest_dir=self.APP_DEST_DIR
-            )
-        with open(dest_path, 'w') as fp:
-            fp.write(dockerfile)
-
-    def _untar(self, tarball_path, dest_path):
-        self.log.debug('[*] - Untar {} ...'.format(tarball_path))
-        if tarball_path.endswith('tar.gz'):
-            tar = tarfile.open(tarball_path)
-            tar.extractall(dest_path)
-            tar.close()
-        else:
-            raise ValueError('Not a tarball')
-
-    def _build_image(self, dockerfile_path, image_id):
-        self.log.debug('[*] - Building image {} ...'.format(image_id))
-        try:
-            image, logs = self.docker_client.images.build(
-                path=dockerfile_path,
-                tag=image_id,
-                rm=True,
-                forcerm=True
-            )
-            for l in logs:
-                self.log.debug(l)
-        except docker.errors.BuildError as e:
-            self.log.error('Build for application <{}> failed!'.format(
-                image_id))
-            for line in e.build_log:
-                if 'stream' in line:
-                    self.log.error(line['stream'].strip())
-            raise e
 
     def _send_appstarted_event(self, app_name):
         event_uri = self.APP_STARTED_EVENT.replace(
@@ -346,25 +429,3 @@ class Application(object):
         except docker.errors.NotFound as e:
             self.log.debug(
                 'Could not kill container <{}>'.format(self.container_name))
-
-
-class AppPython3(Application):
-    IMAGE = 'python:3.7-alpine'
-    APP_TYPE = 'py3'
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.dockerfile_tpl = self._read_dockerfile_template(
-            'Dockerfile.py3.tpl')
-
-
-class AppR4AROS2Py(Application):
-    IMAGE = 'r4a/app-ros2'
-    APP_TYPE = 'r4a_ros2_py'
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.dockerfile_tpl = self._read_dockerfile_template(
-            'Dockerfile.r4a_ros2_py.tpl')
-
-
