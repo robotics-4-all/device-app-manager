@@ -187,20 +187,16 @@ class AppManager(object):
         self.redis.save_db()
         return app_name
 
-    def delete_app(self, app_name):
+    def delete_app(self, app_name, force_stop=False):
         if not self.redis.app_exists(app_name):
             raise ValueError('App does not exist locally')
-        app = self.redis.get_app(app_name)
 
-        if self.redis.app_is_running(app_name):
+        if self.redis.app_is_running(app_name) and force_stop:
             self.log.info('Stoping App before deleting')
-            ## TODO!!
+            self.stop_app(app_name)
 
         self.log.info('Deleting Application <{}>'.format(app_name))
         self.redis.delete_app(app_name)
-
-        ## TODO: Remove from docker!!
-
         ## Save db in hdd
         self.redis.save_db()
 
@@ -402,7 +398,11 @@ class AppManager(object):
                 raise ValueError('Message schema error. app_id is not defined')
             app_name = msg['app_id']
 
-            self.delete_app(app_name)
+            fstop = True
+            if 'force_stop' in msg:
+                fstop = msg['force_stop']
+
+            self.delete_app(app_name, fstop)
 
             return {
                 'status': 200,
