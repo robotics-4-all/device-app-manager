@@ -91,6 +91,13 @@ class RedisController(object):
             charset="utf-8"
         )
 
+    def ping(self):
+        try:
+            self.redis.ping()
+            return True
+        except Exception:
+            return False
+
     def save_db(self):
         try:
             self.redis.bgsave()

@@ -91,7 +91,7 @@ class AppManager(object):
                  redis_port=None,
                  redis_db=None,
                  redis_password=None,
-                 redis_app_list_name=None
+                 redis_app_list_name=None,
                  ):
         atexit.register(self._cleanup)
 
@@ -144,6 +144,11 @@ class AppManager(object):
 
         self.__init_logger()
         self.debug = debug
+        self._deploy_rpc = None
+        self._delete_rpc = None
+        self._start_rpc = None
+        self._install_rpc = None
+        self._stop_rpc = None
 
         self._init_platform_params()
 
@@ -156,7 +161,10 @@ class AppManager(object):
 
         self._create_app_storage_dir()
 
-        self.redis = RedisController(redis_params)
+        self.redis = RedisController(redis_params, redis_app_list_name)
+        if not self.redis.ping():
+            raise Exception('Could not connect to redis server.')
+
         self.app_builder = AppBuilderDocker()
         self.app_executor = AppExecutorDocker(
             self.broker_conn_params,

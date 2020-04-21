@@ -88,14 +88,18 @@ class AppModel(object):
 
 
 class AppBuilderDocker(object):
-    BUILD_TMP_DIR = '/tmp/app-manager/apps/'
+    BUILD_DIR = '/tmp/app-manager/apps/'
     APP_DEST_DIR = '/app'
     APP_SRC_DIR = './app'
     DOCKER_DAEMON_URL = 'unix://var/run/docker.sock'
     IMAGE_NAME_PREFIX = 'app'
 
-    def __init__(self, image_prefix='app'):
+    def __init__(self, image_prefix='app',
+                 build_dir='/tmp/app-manager/apps/',
+                 ):
         self.IMAGE_NAME_PREFIX = image_prefix
+        self.BUILD_DIR = build_dir
+
         self.docker_client = docker.from_env()
         self.docker_cli = docker.APIClient(base_url=self.DOCKER_DAEMON_URL)
         self.__init_logger()
@@ -142,7 +146,7 @@ class AppBuilderDocker(object):
         if app_type not in DOCKERFILE_TPL_MAP:
             raise ValueError('Application type not supported!')
 
-        app_tmp_dir = os.path.join(self.BUILD_TMP_DIR,
+        app_tmp_dir = os.path.join(self.BUILD_DIR,
                                app_name)
 
         # Create temp dir if it does not exist
@@ -202,12 +206,24 @@ class AppExecutorDocker(object):
 
     def __init__(self, platform_params, redis_params,
                  redis_app_list_name='appmanager.apps',
-                 remote_logging=True, send_stats=False):
+                 app_started_event='thing.x.app.y.started',
+                 app_stoped_event='thing.x.app.y.stoped',
+                 app_logs_topic='thing.x.app.y.logs',
+                 app_stats_topic='thing.x.app.y.stats',
+                 remote_logging=True, send_stats=False
+                 ):
+        atexit.register(self._cleanup)
+
         self.platform_params = platform_params
+        self.PLATFORM_APP_LOGS_TOPIC_TPL = app_logs_topic
+        self.PLATFORM_APP_STATS_TOPIC_TPL = app_stats_topic
+        self.APP_STARTED_EVENT = app_started_event
+        self.APP_STOPED_EVENT = app_stoped_event
+
         self.docker_client = docker.from_env()
         self.docker_cli = docker.APIClient(base_url=self.DOCKER_DAEMON_URL)
         self.__init_logger()
-        self.redis = RedisController(redis_params)
+        self.redis = RedisController(redis_params, redis_app_list_name)
         self.running_apps = []  # Array of tuples (app_name, container_name)
         self.remote_logging = remote_logging
         self.send_stats = send_stats
@@ -259,6 +275,10 @@ class AppExecutorDocker(object):
             self._app_exit_handler(app_name, c)
         else:
             del self.running_apps[_aidx]
+
+    def _cleanup(self):
+        ## TODO
+        pass
 
     def _run_container(self, image_id, container_name,
                        detach=True, privileged=False):
