@@ -112,7 +112,7 @@ class AppBuilderDocker(object):
 
     def build_app(self, app_name, app_type, app_tarball_path):
         ## Adds a prefix to create docker image tag.
-        image_name = '{}-{}'.format(self.IMAGE_NAME_PREFIX, app_name)
+        image_name = '{}{}'.format(self.IMAGE_NAME_PREFIX, app_name)
         app_dir = self._prepare_build(app_name, app_type, app_tarball_path)
         self._build_image(app_dir, image_name)
         _app = AppModel(app_name, app_type, docker_image_name=image_name)
@@ -210,7 +210,7 @@ class AppExecutorDocker(object):
                  app_stoped_event='thing.x.app.y.stoped',
                  app_logs_topic='thing.x.app.y.logs',
                  app_stats_topic='thing.x.app.y.stats',
-                 remote_logging=True, send_stats=False
+                 publish_logs=True, publish_stats=False
                  ):
         atexit.register(self._cleanup)
 
@@ -225,8 +225,8 @@ class AppExecutorDocker(object):
         self.__init_logger()
         self.redis = RedisController(redis_params, redis_app_list_name)
         self.running_apps = []  # Array of tuples (app_name, container_name)
-        self.remote_logging = remote_logging
-        self.send_stats = send_stats
+        self.publish_logs = publish_logs
+        self.publish_stats = publish_stats
         ## TODO: Might change!
         self._device_id = self.platform_params.credentials.username
 
@@ -246,11 +246,11 @@ class AppExecutorDocker(object):
         self._send_app_started_event(app_name)
 
         log_thread = None
-        if self.remote_logging:
+        if self.publish_logs:
             log_thread = self._detach_app_logging(_container_name, _container)
 
         stats_thread = None
-        if self.send_stats:
+        if self.publish_stats:
             stats_thread = self._detach_app_stats(_container_name, _container)
 
         exit_capture_thread = self._detach_app_exit_listener(_container_name,

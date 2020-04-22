@@ -60,6 +60,8 @@ def main():
 
     config = load_cfg(config_file)
 
+    ## Parameters passed from CLI are getting priority and override
+    ## those defined in the configuration file
     if username is not None:
         config['username'] = username
     if password is not None:
@@ -94,8 +96,17 @@ def main():
         redis_db=config['redis_db'],
         redis_password=config['redis_password'],
         redis_app_list_name=config['redis_app_list_name'],
-        debug=config['debug']
-
+        debug=config['debug'],
+        app_build_dir=config['app_build_dir'],
+        app_image_prefix=config['app_image_prefix'],
+        keep_app_tarballls=config['keep_app_tarballls'],
+        app_storage_dir=config['app_storage_dir'],
+        app_started_event=config['app_started_event'],
+        app_stoped_event=config['app_stoped_event'],
+        app_logs_topic=config['app_logs_topic'],
+        app_stats_topic=config['app_logs_topic'],
+        publish_app_logs=config['publish_app_logs'],
+        publish_app_stats=config['publish_app_logs']
     )
     manager.run()
 

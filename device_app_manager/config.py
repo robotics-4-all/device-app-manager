@@ -16,86 +16,152 @@ def load_cfg(cfg_file):
         return False
     config = configparser.ConfigParser()
     config.read(cfg_file)
+    ## -------------------------------------------------------------
+    ## ----------------------- CORE Parameters ---------------------
+    ## -------------------------------------------------------------
     try:
         debug = config.get('core', 'debug')
         debug = True if debug == 1 else False
     except configparser.NoOptionError:
         debug = False
     try:
-        username = config.get('platform', 'username')
+        app_build_dir = config.get('core', 'app_build_dir')
+    except configparser.NoOptionError:
+        app_build_dir = '/tmp/app-manager/apps/'
+    try:
+        app_storage_dir = config.get('core', 'app_storage_dir')
+    except configparser.NoOptionError:
+        app_storage_dir = '~/.apps/'
+    try:
+        stop_apps_on_exit = config.get('core', 'stop_apps_on_exit')
+        stop_apps_on_exit = True if stop_apps_on_exit == 1 else False
+    except configparser.NoOptionError:
+        stop_apps_on_exit = False
+    try:
+        keep_app_tarballls  = config.get('core', 'keep_app_tarballls')
+        keep_app_tarballls = True if keep_app_tarballls == 1 else False
+    except configparser.NoOptionError:
+        keep_app_tarballls = False
+    try:
+        app_image_prefix = config.get('core', 'app_image_prefix')
+    except configparser.NoOptionError:
+        app_image_prefix = 'app-'
+    ## -------------------------------------------------------------
+    ## ----------------------- Broker Parameters -------------------
+    ## -------------------------------------------------------------
+    try:
+        username = config.get('broker', 'username')
     except configparser.NoOptionError:
         username = 'bot'
     try:
-        password = config.get('platform', 'password')
+        password = config.get('broker', 'password')
     except configparser.NoOptionError:
         password = 'b0t'
     try:
-        host = config.get('platform', 'host')
+        host = config.get('broker', 'host')
     except configparser.NoOptionError:
         host = '127.0.0.1'
     try:
-        port = config.get('platform', 'port')
+        port = config.get('broker', 'port')
     except configparser.NoOptionError:
         port = '5762'
     try:
-        vhost = config.get('platform', 'vhost')
+        vhost = config.get('broker', 'vhost')
     except configparser.NoOptionError:
         vhost = '/'
+    ## -------------------------------------------------------------
+    ## ------------------ Control Interfaces -----------------------
+    ## -------------------------------------------------------------
     try:
-        heartbeat_topic = config.get('platform_monitoring_interfaces',
-                                     'heartbeat_topic')
-    except configparser.NoOptionError:
-        heartbeat_topic = 'thing.x.appmanager.hearbeat'
-    try:
-        heartbeat_interval = config.get('platform_monitoring_interfaces',
-                                        'heartbeat_interval')
-    except configparser.NoOptionError:
-        heartbeat_interval = 10  # seconds
-    try:
-        app_list_rpc_name = config.get('platform_control_interfaces',
+        app_list_rpc_name = config.get('control_interfaces',
                                        'app_list_rpc_name')
     except configparser.NoOptionError:
         app_list_rpc_name = 'thing.x.appmanager.apps'
     try:
-        get_running_apps_rpc_name = config.get('platform_control_interfaces',
+        get_running_apps_rpc_name = config.get('control_interfaces',
                                                'get_running_apps_rpc_name')
     except configparser.NoOptionError:
         get_running_apps_rpc_name = 'thing.x.appmanager.apps.running'
     try:
-        app_delete_rpc_name = config.get('platform_control_interfaces',
+        app_delete_rpc_name = config.get('control_interfaces',
                                          'app_delete_rpc_name')
     except configparser.NoOptionError:
         app_delete_rpc_name = 'thing.x.appmanager.delete_app'
     try:
-        app_install_rpc_name = config.get('platform_control_interfaces',
+        app_install_rpc_name = config.get('control_interfaces',
                                           'app_install_rpc_name')
     except configparser.NoOptionError:
         app_install_rpc_name = 'thing.x.appmanager.download_app'
     try:
-        app_start_rpc_name = config.get('platform_control_interfaces',
+        app_start_rpc_name = config.get('control_interfaces',
                                         'app_start_rpc_name')
     except configparser.NoOptionError:
         app_start_rpc_name = 'thing.x.appmanager.start_app'
     try:
-        app_stop_rpc_name = config.get('platform_control_interfaces',
+        app_stop_rpc_name = config.get('control_interfaces',
                                        'app_stop_rpc_name')
     except configparser.NoOptionError:
         app_stop_rpc_name = 'thing.x.appmanager.stop_app'
     try:
-        alive_rpc_name = config.get('platform_control_interfaces',
+        alive_rpc_name = config.get('control_interfaces',
                                     'alive_rpc_name')
     except configparser.NoOptionError:
         alive_rpc_name = 'thing.x.appmanager.is_alive'
+    ## ------------------------------------------------------------
+    ## -------------- Monitoring Interfaces -----------------------
+    ## ------------------------------------------------------------
     try:
-        connected_event = config.get('platform_monitoring_interfaces',
+        heartbeat_topic = config.get('monitoring_interfaces',
+                                     'heartbeat_topic')
+    except configparser.NoOptionError:
+        heartbeat_topic = 'thing.x.appmanager.hearbeat'
+    try:
+        heartbeat_interval = config.get('monitoring_interfaces',
+                                        'heartbeat_interval')
+    except configparser.NoOptionError:
+        heartbeat_interval = 10  # seconds
+    try:
+        connected_event = config.get('monitoring_interfaces',
                                      'connected_event')
     except configparser.NoOptionError:
         connected_event = 'thing.x.appmanager.connected'
     try:
-        disconnected_event = config.get('platform_monitoring_interfaces',
+        disconnected_event = config.get('monitoring_interfaces',
                                         'disconnected_event')
     except configparser.NoOptionError:
         disconnected_event = 'thing.x.appmanager.disconnected'
+    ## ------------------------------------------------------------
+    ## -------------- Application Interfaces ----------------------
+    ## ------------------------------------------------------------
+    try:
+        app_started_event = config.get('app_interfaces', 'app_started_event')
+    except configparser.NoOptionError:
+        app_started_event = 'thing.x.app.y.started'
+    try:
+        app_stoped_event = config.get('app_interfaces', 'app_stoped_event')
+    except configparser.NoOptionError:
+        app_stoped_event = 'thing.x.app.y.stoped'
+    try:
+        app_logs_topic = config.get('app_interfaces', 'app_logs_topic')
+    except configparser.NoOptionError:
+        app_logs_topic = 'thing.x.app.y.logs'
+    try:
+        app_stats_topic = config.get('app_interfaces', 'app_stats_topic')
+    except configparser.NoOptionError:
+        app_stats_topic = 'thing.x.app.y.stats'
+    try:
+        publish_app_logs = config.get('app_interfaces', 'publish_app_logs')
+        publish_app_logs = True if publish_app_logs == 1 else False
+    except configparser.NoOptionError:
+        publish_app_logs = False
+    try:
+        publish_app_stats = config.get('app_interfaces', 'publish_app_stats')
+        publish_app_stats = True if publish_app_stats == 1 else False
+    except configparser.NoOptionError:
+        publish_app_stats = False
+    ## ------------------------------------------------------------
+    ## ------------------ Redis Parameters  -----------------------
+    ## ------------------------------------------------------------
     try:
         redis_host = config.get('redis', 'host')
     except configparser.NoOptionError:
@@ -119,6 +185,11 @@ def load_cfg(cfg_file):
 
     return {
         'debug': debug,
+        'app_build_dir': app_build_dir,
+        'stop_apps_on_exit': stop_apps_on_exit,
+        'keep_app_tarballls': keep_app_tarballls,
+        'app_storage_dir': app_storage_dir,
+        'app_image_prefix': app_image_prefix,
         'username': username,
         'password': password,
         'host': host,
@@ -139,5 +210,11 @@ def load_cfg(cfg_file):
         'redis_port': redis_port,
         'redis_db': redis_db,
         'redis_password': redis_password,
-        'redis_app_list_name': redis_app_list_name
+        'redis_app_list_name': redis_app_list_name,
+        'app_started_event': app_started_event,
+        'app_stoped_event': app_stoped_event,
+        'app_logs_topic': app_logs_topic,
+        'app_stats_topic': app_stats_topic,
+        'publish_app_logs': publish_app_logs,
+        'publish_app_stats': publish_app_stats
     }
