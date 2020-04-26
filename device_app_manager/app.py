@@ -35,10 +35,18 @@ DOCKERFILE_TPL_MAP = {
 }
 
 
-
 class AppType(enum.Enum):
     py3 = 1
     r4a_ros2_py = 2
+
+
+class DockerContainerConfig(object):
+    auto_remove = True
+    network_mode = 'host'
+    ipc_mode = 'host'
+    pid_mode = 'host'
+    publish_all_ports = False
+    privileged = False
 
 
 class AppModel(object):
@@ -229,6 +237,7 @@ class AppExecutorDocker(object):
         self.publish_stats = publish_stats
         ## TODO: Might change!
         self._device_id = self.platform_params.credentials.username
+        self.container_config = DockerContainerConfig()
 
     def __init_logger(self):
         """Initialize Logger."""
@@ -280,21 +289,17 @@ class AppExecutorDocker(object):
         ## TODO
         pass
 
-    def _run_container(self, image_id, container_name,
-                       detach=True, privileged=False):
+    def _run_container(self, image_id, container_name):
         container = self.docker_client.containers.run(
             image_id,
             name=container_name,
-            detach=detach,
-            # auto_remove=True,
-            # network='host',
-            network_mode='host',
-            ipc_mode='host',
-            pid_mode='host',
-            # publish_all_ports=True,
-            # remove=True
+            detach=True,
+            network_mode=self.container_config.network_mode,
+            ipc_mode=self.container_config.ipc_mode,
+            pid_mode=self.container_config.pid_mode,
         )
-        self.log.debug('Application Container created!')
+        self.log.debug('Application Container created - [{}:{}]'.format(
+            container_name, container.id))
         return container
 
     def _wait_app_exit(self, app_name, stop_event, container):
