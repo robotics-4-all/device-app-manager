@@ -35,10 +35,18 @@ DOCKERFILE_TPL_MAP = {
 }
 
 
-
 class AppType(enum.Enum):
     py3 = 1
     r4a_ros2_py = 2
+
+
+class DockerContainerConfig(object):
+    auto_remove = True
+    network_mode = 'host'
+    ipc_mode = 'host'
+    pid_mode = 'host'
+    publish_all_ports = False
+    privileged = False
 
 
 class AppModel(object):
@@ -88,14 +96,18 @@ class AppModel(object):
 
 
 class AppBuilderDocker(object):
-    BUILD_TMP_DIR = '/tmp/app-manager/apps/'
+    BUILD_DIR = '/tmp/app-manager/apps/'
     APP_DEST_DIR = '/app'
     APP_SRC_DIR = './app'
     DOCKER_DAEMON_URL = 'unix://var/run/docker.sock'
     IMAGE_NAME_PREFIX = 'app'
 
-    def __init__(self, image_prefix='app'):
+    def __init__(self, image_prefix='app',
+                 build_dir='/tmp/app-manager/apps/',
+                 ):
         self.IMAGE_NAME_PREFIX = image_prefix
+        self.BUILD_DIR = build_dir
+
         self.docker_client = docker.from_env()
         self.docker_cli = docker.APIClient(base_url=self.DOCKER_DAEMON_URL)
         self.__init_logger()
@@ -108,7 +120,7 @@ class AppBuilderDocker(object):
 
     def build_app(self, app_name, app_type, app_tarball_path):
         ## Adds a prefix to create docker image tag.
-        image_name = '{}-{}'.format(self.IMAGE_NAME_PREFIX, app_name)
+        image_name = '{}{}'.format(self.IMAGE_NAME_PREFIX, app_name)
         app_dir = self._prepare_build(app_name, app_type, app_tarball_path)
         self._build_image(app_dir, image_name)
         _app = AppModel(app_name, app_type, docker_image_name=image_name)
@@ -142,7 +154,7 @@ class AppBuilderDocker(object):
         if app_type not in DOCKERFILE_TPL_MAP:
             raise ValueError('Application type not supported!')
 
-        app_tmp_dir = os.path.join(self.BUILD_TMP_DIR,
+        app_tmp_dir = os.path.join(self.BUILD_DIR,
                                app_name)
 
         # Create temp dir if it does not exist
@@ -202,17 +214,30 @@ class AppExecutorDocker(object):
 
     def __init__(self, platform_params, redis_params,
                  redis_app_list_name='appmanager.apps',
-                 remote_logging=True, send_stats=False):
+                 app_started_event='thing.x.app.y.started',
+                 app_stoped_event='thing.x.app.y.stoped',
+                 app_logs_topic='thing.x.app.y.logs',
+                 app_stats_topic='thing.x.app.y.stats',
+                 publish_logs=True, publish_stats=False
+                 ):
+        atexit.register(self._cleanup)
+
         self.platform_params = platform_params
+        self.PLATFORM_APP_LOGS_TOPIC_TPL = app_logs_topic
+        self.PLATFORM_APP_STATS_TOPIC_TPL = app_stats_topic
+        self.APP_STARTED_EVENT = app_started_event
+        self.APP_STOPED_EVENT = app_stoped_event
+
         self.docker_client = docker.from_env()
         self.docker_cli = docker.APIClient(base_url=self.DOCKER_DAEMON_URL)
         self.__init_logger()
-        self.redis = RedisController(redis_params)
+        self.redis = RedisController(redis_params, redis_app_list_name)
         self.running_apps = []  # Array of tuples (app_name, container_name)
-        self.remote_logging = remote_logging
-        self.send_stats = send_stats
+        self.publish_logs = publish_logs
+        self.publish_stats = publish_stats
         ## TODO: Might change!
         self._device_id = self.platform_params.credentials.username
+        self.container_config = DockerContainerConfig()
 
     def __init_logger(self):
         """Initialize Logger."""
@@ -230,11 +255,11 @@ class AppExecutorDocker(object):
         self._send_app_started_event(app_name)
 
         log_thread = None
-        if self.remote_logging:
+        if self.publish_logs:
             log_thread = self._detach_app_logging(_container_name, _container)
 
         stats_thread = None
-        if self.send_stats:
+        if self.publish_stats:
             stats_thread = self._detach_app_stats(_container_name, _container)
 
         exit_capture_thread = self._detach_app_exit_listener(_container_name,
@@ -260,21 +285,21 @@ class AppExecutorDocker(object):
         else:
             del self.running_apps[_aidx]
 
-    def _run_container(self, image_id, container_name,
-                       detach=True, privileged=False):
+    def _cleanup(self):
+        ## TODO
+        pass
+
+    def _run_container(self, image_id, container_name):
         container = self.docker_client.containers.run(
             image_id,
             name=container_name,
-            detach=detach,
-            # auto_remove=True,
-            # network='host',
-            network_mode='host',
-            ipc_mode='host',
-            pid_mode='host',
-            # publish_all_ports=True,
-            # remove=True
+            detach=True,
+            network_mode=self.container_config.network_mode,
+            ipc_mode=self.container_config.ipc_mode,
+            pid_mode=self.container_config.pid_mode,
         )
-        self.log.debug('Application Container created!')
+        self.log.debug('Application Container created - [{}:{}]'.format(
+            container_name, container.id))
         return container
 
     def _wait_app_exit(self, app_name, stop_event, container):
@@ -401,110 +426,3 @@ class AppExecutorDocker(object):
             'stop_event': t_stop_event
         }
         return app_exit_thread
-
-
-class Application(object):
-    IMAGE = 'python:3.7-alpine'
-    REDIS_APP_LIST_NAME = 'appmanager.apps'
-
-    def __init__(
-        self,
-        app_name,
-        app_type,
-        platform_params,
-        name=None,
-        verbose=None,
-        remote_logging=True,
-        send_app_stats=False,
-        redis_host='localhost',
-        redis_port=6379,
-        redis_db=0,
-        redis_password=None,
-        redis_app_list_name='appmanager.apps'
-    ):
-
-        self.app_type = app_type
-        self.app_name = app_name
-        self.app_state = None
-        self.app_tar_path = None
-        self.image_id = None
-        self.docker_container = None
-        self.platform_params = platform_params
-        self.platform_creds = platform_params.credentials
-        self.remote_logging = remote_logging
-        self.send_app_stats = send_app_stats
-
-        self.REDIS_APP_LIST_NAME = redis_app_list_name
-
-        # Register callback for garbage collector exit. Cleanup.
-        atexit.register(self._cleanup)
-
-        self.__init_logger()
-
-        self.redis = RedisController(redis_host, redis_port, redis_db,
-                                     redis_password,
-                                     app_list_name=self.REDIS_APP_LIST_NAME)
-
-        try:
-            self._load_app_info_from_db()
-        except ValueError as exc:
-            # Does not exist locally
-            self.log.warn('Application does not exist locally.')
-            self.image_id = self.app_name
-
-        self.container = None
-        self.script_dir = os.path.dirname(os.path.realpath(__file__))
-
-        # self.container_name = self.docker_container['name'] if self.docker_container \
-        #     is not None else 'app-r4a-{}'.format(self.app_name)
-        self.container_name = self.docker_container['name'] if self.docker_container \
-            is not None else self.app_name
-        self.container_id = self.docker_container['id'] if self.docker_container \
-            is not None else None
-
-        self.app_stats_thread = None
-        self.app_log_thread = None
-
-
-    def stop(self):
-        self._send_appstoped_event(self.app_name)
-        self._cleanup()
-
-
-
-    def _read_dockerfile_template(self, fname):
-        tpl_path = os.path.join(self.script_dir, 'templates', fname)
-        with open(tpl_path, "r+") as fp:
-            dockerfile_tpl = fp.read()
-            return dockerfile_tpl
-
-    def _gen_uid(self):
-        return uuid.uuid4().hex[0:8]
-
-    def _serialize(self):
-        return {
-            'name': self.app_name,
-            'state': self.app_state,
-            'type': self.app_type,
-            'tarball_path': self.app_tar_path,
-            'docker_image': self.image_id,
-            'docker_container': {
-                'name': self.container_name,
-                'id': self.container_id
-            }
-        }
-
-    def _cleanup(self):
-        if not self.docker_client:
-            return
-        try:
-            self.log.debug('Killing container: {}'.format(self.container_name))
-            c = self.docker_client.containers.get(self.container_name)
-            c.remove(force=True)
-            if self.app_stats_thread:
-                self.app_stats_thread['stop_event'].set()
-            if self.app_log_thread:
-                self.app_log_thread['stop_event'].set()
-        except docker.errors.NotFound as e:
-            self.log.debug(
-                'Could not kill container <{}>'.format(self.container_name))

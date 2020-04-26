@@ -64,16 +64,16 @@ class AppManager(object):
     PLATFORM_HOST = '155.207.33.189'
     PLATFORM_VHOST = '/'
     HEARTBEAT_INTERVAL = 10  # seconds
-    REDIS_HOST = 'localhost'
-    REDIS_PORT = 6379
-    REDIS_DB = 0
-    REDIS_PASSWORD = ''
-    REDIS_APP_LIST_NAME = 'appmanager.apps'
 
     def __init__(self,
                  platform_creds=('guest', 'guest'),
                  heartbeat_interval=10,
                  debug=True,
+                 app_build_dir=None,
+                 stop_apps_on_exit=None,
+                 keep_app_tarballls=None,
+                 app_storage_dir=None,
+                 app_image_prefix=None,
                  app_list_rpc_name=None,
                  get_running_apps_rpc_name=None,
                  app_delete_rpc_name=None,
@@ -91,7 +91,13 @@ class AppManager(object):
                  redis_port=None,
                  redis_db=None,
                  redis_password=None,
-                 redis_app_list_name=None
+                 redis_app_list_name=None,
+                 app_started_event=None,
+                 app_stoped_event=None,
+                 app_logs_topic=None,
+                 app_stats_topic=None,
+                 publish_app_logs=None,
+                 publish_app_stats=None,
                  ):
         atexit.register(self._cleanup)
 
@@ -125,16 +131,6 @@ class AppManager(object):
             self.PLATFORM_PORT = platform_port
         if platform_vhost is not None:
             self.PLATFORM_VHOST = platform_vhost
-        if redis_host is not None:
-            self.REDIS_HOST = redis_host
-        if redis_port is not None:
-            self.REDIS_PORT = redis_port
-        if redis_db is not None:
-            self.REDIS_DB = redis_db
-        if redis_password is not None:
-            self.REDIS_PASSWORD = redis_password
-        if redis_app_list_name is not None:
-            self.REDIS_APP_LIST_NAME = redis_app_list_name
 
         self.APP_STORAGE_DIR = os.path.expanduser(self.APP_STORAGE_DIR)
 
@@ -144,6 +140,11 @@ class AppManager(object):
 
         self.__init_logger()
         self.debug = debug
+        self._deploy_rpc = None
+        self._delete_rpc = None
+        self._start_rpc = None
+        self._install_rpc = None
+        self._stop_rpc = None
 
         self._init_platform_params()
 
@@ -152,16 +153,29 @@ class AppManager(object):
             port=redis_port,
             db=redis_db,
             password=redis_password,
+            redis_app_list_name=redis_app_list_name
         )
 
         self._create_app_storage_dir()
 
-        self.redis = RedisController(redis_params)
-        self.app_builder = AppBuilderDocker()
+        self.redis = RedisController(redis_params, redis_app_list_name)
+        if not self.redis.ping():
+            raise Exception('Could not connect to redis server.')
+
+        self.app_builder = AppBuilderDocker(
+            build_dir=app_build_dir,
+            image_prefix=app_image_prefix
+        )
         self.app_executor = AppExecutorDocker(
             self.broker_conn_params,
             redis_params,
-            redis_app_list_name=redis_app_list_name
+            redis_app_list_name=redis_app_list_name,
+            app_started_event=app_started_event,
+            app_stoped_event=app_stoped_event,
+            app_logs_topic=app_logs_topic,
+            app_stats_topic=app_stats_topic,
+            publish_logs=publish_app_logs,
+            publish_stats=publish_app_stats
         )
 
     def install_app(self, app_name, app_type, app_tarball_path):
@@ -179,20 +193,16 @@ class AppManager(object):
         self.redis.save_db()
         return app_name
 
-    def delete_app(self, app_name):
+    def delete_app(self, app_name, force_stop=False):
         if not self.redis.app_exists(app_name):
             raise ValueError('App does not exist locally')
-        app = self.redis.get_app(app_name)
 
-        if self.redis.app_is_running(app_name):
+        if self.redis.app_is_running(app_name) and force_stop:
             self.log.info('Stoping App before deleting')
-            ## TODO!!
+            self.stop_app(app_name)
 
         self.log.info('Deleting Application <{}>'.format(app_name))
         self.redis.delete_app(app_name)
-
-        ## TODO: Remove from docker!!
-
         ## Save db in hdd
         self.redis.save_db()
 
@@ -238,6 +248,9 @@ class AppManager(object):
 
     def _cleanup(self):
         self._send_disconnected_event()
+        _rapps = self.redis.get_running_apps()
+        for _app in _rapps:
+            self.stop_app(_app['name'])
         if self._deploy_rpc:
             self._deploy_rpc.stop()
 
@@ -394,7 +407,11 @@ class AppManager(object):
                 raise ValueError('Message schema error. app_id is not defined')
             app_name = msg['app_id']
 
-            self.delete_app(app_name)
+            fstop = True
+            if 'force_stop' in msg:
+                fstop = msg['force_stop']
+
+            self.delete_app(app_name, fstop)
 
             return {
                 'status': 200,
