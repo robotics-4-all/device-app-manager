@@ -19,12 +19,12 @@ Returns a list of the installed applications.
 Usage example:
 
 ```bash
-./get_running_apps.py \
-    --device-id device2 \
-    --host r4a-platform.ddns.net \
-    --port 5782 \
-    --vhost / \
-    --debug \
+./get_running_apps.py             \
+    --device-id device2           \
+    --host r4a-platform.ddns.net  \
+    --port 5782                   \
+    --vhost /                     \
+    --debug
 ```
 
 ## Get Applications Example
@@ -34,12 +34,12 @@ Returns a list of the installed applications.
 Usage example:
 
 ```bash
-./get_apps.py \
-    --device-id device2 \
-    --host r4a-platform.ddns.net \
-    --port 5782 \
-    --vhost / \
-    --debug \
+./get_apps.py                     \
+    --device-id device2           \
+    --host r4a-platform.ddns.net  \
+    --port 5782                   \
+    --vhost /                     \
+    --debug
 ```
 
 ## Start Application Example
@@ -67,12 +67,12 @@ An example demonstrating application kill call can be found in
 Usage example:
 
 ```bash
-./stop_app.py \
-    --app-id test-app \
-    --device-id device2 \
-    --host r4a-platform.ddns.net \
-    --port 5782 \
-    --vhost / \
+./stop_app.py                     \
+    --app-id test-app             \
+    --device-id device2           \
+    --host r4a-platform.ddns.net  \
+    --port 5782                   \
+    --vhost /                     \
     --debug
 ```
 
@@ -85,8 +85,22 @@ Usage example:
     --device-id device2		  \
     --fpath app.tar.gz		  \
     --app-type r4a_ros2_py	  \
+    --app-id test-app	          \
     --host r4a-platform.ddns.net  \
     --port 5782			  \
     --vhost /			  \
-    --debug			  \
+    --debug			  
+```
+
+## Delete Application Example
+
+```bash
+./delete_app.py           \
+    --device-id device2   \
+    --app-id test_inf     \
+    --host 155.207.33.189 \
+    --port 5782           \
+    --vhost /             \
+    --debug
+
 ```
