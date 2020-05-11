@@ -373,14 +373,18 @@ class AppManager(object):
 
     def _install_app_rpc_callback(self, msg, meta):
         try:
+            if 'app_id' not in msg:
+                raise ValueError('Message does not include app_id property')
+            if msg['app_id'] == '':
+                raise ValueError('App Id is empty')
             if 'app_type' not in msg:
                 raise ValueError('Message does not include app_type property')
             if 'app_tarball' not in msg:
                 raise ValueError('Message does not include app_tarball property')
+            app_name = msg['app_id']
             app_type = msg['app_type']
             app_file = msg['app_tarball']
             # Optional. Empty app_name means unnamed app
-            app_name = msg['app_id'] if 'app_id' in msg else ''
             tarball_b64 = app_file['data']
 
             tarball_path = self._store_app_tar(
