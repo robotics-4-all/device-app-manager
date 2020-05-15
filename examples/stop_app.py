@@ -76,15 +76,14 @@ if __name__ == "__main__":
     conn_params = amqp_common.ConnectionParameters(
         host=host, port=port, vhost=vhost)
     conn_params.credentials = amqp_common.Credentials(username, password)
-    conn = amqp_common.SharedConnection(conn_params)
 
     if app_id == '':
         print('[*] - Missing --app-id argument!')
         sys.exit(1)
     rpc_name = rpc_name.format(device_id)
-    rpc_client = amqp_common.RpcClient(rpc_name, connection=conn)
+    rpc_client = amqp_common.RpcClient(rpc_name, connection_params=conn_params)
     msg = AppKillMessage(app_id)
 
     rpc_client.debug = True
-    resp = rpc_client.call(msg.serialize_json(), timeout=30)
+    resp = rpc_client.call(msg.to_dict(), timeout=30)
     print('[*] - Response:\n{}'.format(resp))

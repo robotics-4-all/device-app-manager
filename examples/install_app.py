@@ -97,5 +97,5 @@ if __name__ == "__main__":
     msg = AppDownloadMessage(app_id, app_type, fmsg)
 
     rpc_client.debug = True
-    resp = rpc_client.call(msg.serialize_json(), timeout=30)
+    resp = rpc_client.call(msg.to_dict(), timeout=30)
     print('[*] - Response:\n{}'.format(resp))
