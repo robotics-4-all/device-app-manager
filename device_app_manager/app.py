@@ -395,7 +395,6 @@ class AppExecutorDocker(object):
             topic_stats))
 
         for line in container.stats(
-                container=container_id,
                 decode=True,
                 stream=True):
             _stats_msg = line.strip().decode('utf-8')

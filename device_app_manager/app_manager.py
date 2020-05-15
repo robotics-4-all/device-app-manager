@@ -367,6 +367,7 @@ class AppManager(object):
         self._delete_rpc.run_threaded()
 
     def _isalive_rpc_callback(self, msg, meta):
+        self.log.info('Call <is_alive> RPC')
         return {
             'status': 200
         }
@@ -434,13 +435,13 @@ class AppManager(object):
             'error': ''
         }
         try:
-            # Optional. Empty app_name means unnamed app
-            app_name = msg['app_id'] if 'app_id' in msg else ''
-
+            if 'app_id' not in msg:
+                raise ValueError('Message does not include app_id property')
+            if msg['app_id'] == '':
+                raise ValueError('App Id is empty')
+            app_name = msg['app_id']
             if not isinstance(app_name, str):
                 raise TypeError('Parameter app_name should be of type string')
-            elif app_name == '':
-                raise ValueError('Parameter app_name value is empty')
 
             app_id = self.start_app(app_name)
         except Exception as e:
@@ -547,4 +548,3 @@ class AppManager(object):
         except Exception as exc:
             self.log.error(exc, exc_info=True)
             self._cleanup()
-
