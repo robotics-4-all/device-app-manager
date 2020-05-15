@@ -408,8 +408,10 @@ class AppManager(object):
 
     def _delete_app_rpc_callback(self, msg, meta):
         try:
-            if not 'app_id' in msg:
+            if 'app_id' not in msg:
                 raise ValueError('Message schema error. app_id is not defined')
+            if msg['app_id'] == '':
+                raise ValueError('App Id is empty')
             app_name = msg['app_id']
 
             fstop = True

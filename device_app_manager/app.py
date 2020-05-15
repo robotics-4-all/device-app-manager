@@ -307,8 +307,12 @@ class AppExecutorDocker(object):
         self._app_exit_handler(app_name, container)
 
     def _app_exit_handler(self, app_name, container):
-        self.redis.set_app_state(app_name, 0)
-        self.redis.save_db()
+        try:
+            if self.redis.app_exists(app_name):
+                self.redis.set_app_state(app_name, 0)
+            self.redis.save_db()
+        except Exception as exc:
+            pass
         try:
             container.remove(force=True)
         except docker.errors.APIError:
@@ -376,6 +380,7 @@ class AppExecutorDocker(object):
                     'timestamp': 0,
                     'log_msg': _log_msg
                 }
+                self.log.debug('Sending logs of app <{}>'.format(app_name))
                 app_logs_pub.publish(msg)
                 if stop_event.is_set():
                     break
@@ -397,7 +402,9 @@ class AppExecutorDocker(object):
         for line in container.stats(
                 decode=True,
                 stream=True):
-            _stats_msg = line.strip().decode('utf-8')
+            _stats_msg = line
+            self.log.debug(
+                'Sending stats of app <{}> container'.format(app_name))
             app_stats_pub.publish(_stats_msg)
             if stop_event.is_set():
                 break
