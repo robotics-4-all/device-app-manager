@@ -15,10 +15,11 @@ import amqp_common
 
 
 class AppStartMessage(amqp_common.Message):
-    __slots__ = ['app_id']
+    __slots__ = ['app_id', 'app_args']
 
-    def __init__(self, app_id):
+    def __init__(self, app_id, app_args=[]):
         self.app_id = app_id
+        self.app_args=app_args
 
 
 if __name__ == "__main__":
@@ -82,7 +83,7 @@ if __name__ == "__main__":
 
     rpc_name = rpc_name.format(device_id)
     rpc_client = amqp_common.RpcClient(rpc_name, connection_params=conn_params)
-    msg = AppStartMessage(app_id)
+    msg = AppStartMessage(app_id, ['--arg1', '1'])
 
     rpc_client.debug = True
     resp = rpc_client.call(msg.to_dict(), timeout=30)

@@ -14,6 +14,7 @@ import threading
 import json
 import enum
 from collections import namedtuple
+import yaml
 
 from jinja2 import Template, Environment, PackageLoader, select_autoescape
 
@@ -34,10 +35,10 @@ DOCKERFILE_TPL_MAP = {
     # 'ros2_package': 'Dockerfile.ros2_package.tpl'  ## Not yet supported
 }
 
-
-class AppType(enum.Enum):
-    py3 = 1
-    r4a_ros2_py = 2
+DOCKER_COMMAND_MAP = {
+    'py3': ['python3', '-u', 'app.py'],
+    'r4a_ros2_py': ['python3', '-u', 'app.py']
+}
 
 
 class DockerContainerConfig(object):
@@ -53,7 +54,8 @@ class AppModel(object):
 
     def __init__(self, name=None, app_type=None, state=0,
                  docker_image_name=None, docker_container_id=None,
-                 docker_container_name=None):
+                 docker_container_name=None, app_info=None,
+                 init_params=None, scheduler_params=None):
         self.name = name
         self.app_type = app_type
         self.state = state
@@ -62,6 +64,9 @@ class AppModel(object):
         self.docker_container_name = docker_container_name
         self.created_at = -1
         self.updated_at = -1
+        self.info = app_info
+        self.init_params = init_params
+        self.scheduler_params = scheduler_params
 
     @property
     def docker(self):
@@ -90,7 +95,9 @@ class AppModel(object):
                     'name': self.docker_container_name,
                     'id': self.docker_container_id
                 }
-            }
+            },
+            'info': self.info,
+            'init_params': self.init_params
         }
         return _d
 
@@ -101,6 +108,9 @@ class AppBuilderDocker(object):
     APP_SRC_DIR = './app'
     DOCKER_DAEMON_URL = 'unix://var/run/docker.sock'
     IMAGE_NAME_PREFIX = 'app'
+    APP_INIT_FILE_NAME = 'init.conf'
+    APP_INFO_FILE_NAME = 'app.info'
+    SCHEDULER_FILE_NAME = 'exec.conf'
 
     def __init__(self, image_prefix='app',
                  build_dir='/tmp/app-manager/apps/',
@@ -121,9 +131,25 @@ class AppBuilderDocker(object):
     def build_app(self, app_name, app_type, app_tarball_path):
         ## Adds a prefix to create docker image tag.
         image_name = '{}{}'.format(self.IMAGE_NAME_PREFIX, app_name)
-        app_dir = self._prepare_build(app_name, app_type, app_tarball_path)
+
+        app_dir = self._prepare_build(
+            app_name, app_type, app_tarball_path)
+
         self._build_image(app_dir, image_name)
-        _app = AppModel(app_name, app_type, docker_image_name=image_name)
+
+        if app_type == 'r4a_ros2_py':
+            init_params = self._read_init_params(
+                os.path.join(app_dir, 'app', self.APP_INIT_FILE_NAME))
+            app_info = self._read_app_info(
+                os.path.join(app_dir, 'app', self.APP_INFO_FILE_NAME))
+            scheduler_params = self._read_scheduler_params(
+                os.path.join(app_dir, 'app', self.SCHEDULER_FILE_NAME))
+
+            _app = AppModel(app_name, app_type, docker_image_name=image_name,
+                            init_params=init_params, app_info=app_info,
+                            scheduler_params=scheduler_params)
+        else:
+            _app = AppModel(app_name, app_type, docker_image_name=image_name)
         return _app
 
     def __init_logger(self):
@@ -168,8 +194,27 @@ class AppBuilderDocker(object):
         dockerfile_path = os.path.join(app_tmp_dir, 'Dockerfile')
 
         self._untar_app(app_tarball_path, app_src_dir)
+
         self._create_dockerfile(app_type, self.APP_SRC_DIR, dockerfile_path)
+
+        ## Dirty Solution!!
+        # if app_type == 'r4a_ros2_py':
+
         return app_tmp_dir
+
+    def _read_yaml_file(self, fpath):
+        with open(fpath, 'r') as fstream:
+            data = yaml.safe_load(fstream)
+            return data
+
+    def _read_init_params(self, fpath):
+        return self._read_yaml_file(fpath)['params']
+
+    def _read_app_info(self, fpath):
+        return self._read_yaml_file(fpath)
+
+    def _read_scheduler_params(self, fpath):
+        return self._read_yaml_file(fpath)
 
     def _create_dockerfile(self, app_type, app_src_dir, dest_path):
         _tpl = self._dockerfile_templates[app_type]
@@ -243,10 +288,23 @@ class AppExecutorDocker(object):
         """Initialize Logger."""
         self.log = create_logger(self.__class__.__name__)
 
-    def run_app(self, app_name):
+    def run_app(self, app_name, app_args=[]):
+        """
+            @param app_name: str
+            @param app_args: list
+        """
         image_id = self.redis.get_app_image(app_name)
         _container_name = app_name
-        _container = self._run_container(image_id, _container_name)
+
+        app_type = self.redis.get_app_type(app_name)
+        ## DIRTY SOLUTION!!
+        docker_cmd = DOCKER_COMMAND_MAP[app_type]
+        if app_args is not None:
+            docker_cmd = docker_cmd + app_args
+
+
+        _container = self._run_container(image_id, _container_name,
+                                         cmd=docker_cmd)
 
         self.redis.set_app_state(app_name, 1)
         self.redis.set_app_container(app_name, _container_name, _container.id)
@@ -289,7 +347,10 @@ class AppExecutorDocker(object):
         ## TODO
         pass
 
-    def _run_container(self, image_id, container_name):
+    def _run_container(self, image_id, container_name, cmd=None):
+        self.log.debug(
+            'Starting application {} with cmd {}'.format(image_id, cmd))
+        self.log.debug('-------- Executing within Container... --------->')
         container = self.docker_client.containers.run(
             image_id,
             name=container_name,
@@ -297,7 +358,9 @@ class AppExecutorDocker(object):
             network_mode=self.container_config.network_mode,
             ipc_mode=self.container_config.ipc_mode,
             pid_mode=self.container_config.pid_mode,
+            command=cmd
         )
+        self.log.debug('<------------------------------------------------')
         self.log.debug('Application Container created - [{}:{}]'.format(
             container_name, container.id))
         return container
