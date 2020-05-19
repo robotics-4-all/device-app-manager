@@ -291,7 +291,8 @@ Starts  a pre-installed application.
   
 ```
 {
-  "app_id": <application_unique_id>
+  "app_id": <application_unique_id>,
+  "app_args": []
 }
 ```
   - Output:
@@ -303,6 +304,9 @@ Starts  a pre-installed application.
   "error": "<error_message>"
 }
 ```
+
+`app_args` can be used to pass arguments to the application.
+Array of flags/values.
 
 #### Stop Application Service
 
