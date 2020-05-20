@@ -308,6 +308,10 @@ Starts  a pre-installed application.
 `app_args` can be used to pass arguments to the application.
 Array of flags/values.
 
+**Example RPC**:
+
+`start_app(app_id="test", app_args=['-l', 'a'])`
+
 #### Stop Application Service
 
 Stops a running application.
@@ -328,6 +332,10 @@ Stops a running application.
   "error": "<error_message>"
 }
 ```
+
+**Example RPC**:
+
+`stop_app(app_id="test")`
 
 #### Delete Application Service
 
@@ -350,6 +358,9 @@ Delete a pre-installed application.
 }
 ```
 
+**Example RPC**:
+
+`delete_app(app_id="test")`
 
 #### Is Alive Service
 
