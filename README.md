@@ -76,7 +76,6 @@ Example `app.info`:
 name: <string>
 version: <string>
 type: "r4a_ros2_py"
-elsa_version: <string>
 description: <string>
 tags: <array_of_strings>
 ```
