@@ -119,6 +119,10 @@ class RedisController(object):
                 return _app
         raise ValueError('Application does not exist in db.')
 
+    def get_app_type(self, app_name):
+        _app = self.get_app(app_name)
+        return _app['type']
+
     def app_exists(self, app_name):
         apps = self.get_apps()
         for _app in apps:

@@ -206,7 +206,7 @@ class AppManager(object):
         ## Save db in hdd
         self.redis.save_db()
 
-    def start_app(self, app_name):
+    def start_app(self, app_name, app_args=[]):
         if not self.redis.app_exists(app_name):
             raise ValueError('App does not exist locally')
 
@@ -215,7 +215,7 @@ class AppManager(object):
         if app['state'] == 1:
             raise ValueError('Application is allready running.')
 
-        self.app_executor.run_app(app_name)
+        self.app_executor.run_app(app_name, app_args)
         return app_name
 
     def stop_app(self, app_name):
@@ -367,20 +367,25 @@ class AppManager(object):
         self._delete_rpc.run_threaded()
 
     def _isalive_rpc_callback(self, msg, meta):
+        self.log.info('Call <is_alive> RPC')
         return {
             'status': 200
         }
 
     def _install_app_rpc_callback(self, msg, meta):
         try:
+            if 'app_id' not in msg:
+                raise ValueError('Message does not include app_id property')
+            if msg['app_id'] == '':
+                raise ValueError('App Id is empty')
             if 'app_type' not in msg:
                 raise ValueError('Message does not include app_type property')
             if 'app_tarball' not in msg:
                 raise ValueError('Message does not include app_tarball property')
+            app_name = msg['app_id']
             app_type = msg['app_type']
             app_file = msg['app_tarball']
             # Optional. Empty app_name means unnamed app
-            app_name = msg['app_id'] if 'app_id' in msg else ''
             tarball_b64 = app_file['data']
 
             tarball_path = self._store_app_tar(
@@ -403,8 +408,10 @@ class AppManager(object):
 
     def _delete_app_rpc_callback(self, msg, meta):
         try:
-            if not 'app_id' in msg:
+            if 'app_id' not in msg:
                 raise ValueError('Message schema error. app_id is not defined')
+            if msg['app_id'] == '':
+                raise ValueError('App Id is empty')
             app_name = msg['app_id']
 
             fstop = True
@@ -430,15 +437,18 @@ class AppManager(object):
             'error': ''
         }
         try:
-            # Optional. Empty app_name means unnamed app
-            app_name = msg['app_id'] if 'app_id' in msg else ''
-
+            if 'app_id' not in msg:
+                raise ValueError('Message does not include app_id property')
+            if msg['app_id'] == '':
+                raise ValueError('App Id is empty')
+            app_name = msg['app_id']
             if not isinstance(app_name, str):
                 raise TypeError('Parameter app_name should be of type string')
-            elif app_name == '':
-                raise ValueError('Parameter app_name value is empty')
+            app_args = []
+            if 'app_args' in msg:
+                app_args = msg['app_args']
 
-            app_id = self.start_app(app_name)
+            app_id = self.start_app(app_name, app_args)
         except Exception as e:
             self.log.error(e, exc_info=True)
             resp['status'] = 404
@@ -543,4 +553,3 @@ class AppManager(object):
         except Exception as exc:
             self.log.error(exc, exc_info=True)
             self._cleanup()
-

@@ -20,8 +20,7 @@ def load_cfg(cfg_file):
     ## ----------------------- CORE Parameters ---------------------
     ## -------------------------------------------------------------
     try:
-        debug = config.get('core', 'debug')
-        debug = True if debug == 1 else False
+        debug = config.getboolean('core', 'debug')
     except configparser.NoOptionError:
         debug = False
     try:
@@ -33,13 +32,11 @@ def load_cfg(cfg_file):
     except configparser.NoOptionError:
         app_storage_dir = '~/.apps/'
     try:
-        stop_apps_on_exit = config.get('core', 'stop_apps_on_exit')
-        stop_apps_on_exit = True if stop_apps_on_exit == 1 else False
+        stop_apps_on_exit = config.getboolean('core', 'stop_apps_on_exit')
     except configparser.NoOptionError:
         stop_apps_on_exit = False
     try:
-        keep_app_tarballls  = config.get('core', 'keep_app_tarballls')
-        keep_app_tarballls = True if keep_app_tarballls == 1 else False
+        keep_app_tarballls  = config.getboolean('core', 'keep_app_tarballls')
     except configparser.NoOptionError:
         keep_app_tarballls = False
     try:
@@ -116,7 +113,7 @@ def load_cfg(cfg_file):
     except configparser.NoOptionError:
         heartbeat_topic = 'thing.x.appmanager.hearbeat'
     try:
-        heartbeat_interval = config.get('monitoring_interfaces',
+        heartbeat_interval = config.getint('monitoring_interfaces',
                                         'heartbeat_interval')
     except configparser.NoOptionError:
         heartbeat_interval = 10  # seconds
@@ -150,13 +147,13 @@ def load_cfg(cfg_file):
     except configparser.NoOptionError:
         app_stats_topic = 'thing.x.app.y.stats'
     try:
-        publish_app_logs = config.get('app_interfaces', 'publish_app_logs')
-        publish_app_logs = True if publish_app_logs == 1 else False
+        publish_app_logs = config.getboolean('app_interfaces',
+                                             'publish_app_logs')
     except configparser.NoOptionError:
         publish_app_logs = False
     try:
-        publish_app_stats = config.get('app_interfaces', 'publish_app_stats')
-        publish_app_stats = True if publish_app_stats == 1 else False
+        publish_app_stats = config.getboolean('app_interfaces',
+                                              'publish_app_stats')
     except configparser.NoOptionError:
         publish_app_stats = False
     ## ------------------------------------------------------------
@@ -167,11 +164,11 @@ def load_cfg(cfg_file):
     except configparser.NoOptionError:
         redis_host = 'localhost'
     try:
-        redis_port = config.get('redis', 'port')
+        redis_port = config.getint('redis', 'port')
     except configparser.NoOptionError:
         redis_port = 6379
     try:
-        redis_db = config.get('redis', 'database')
+        redis_db = config.getint('redis', 'database')
     except configparser.NoOptionError:
         redis_db = 0
     try:
@@ -193,9 +190,9 @@ def load_cfg(cfg_file):
         'username': username,
         'password': password,
         'host': host,
-        'port': int(port),
+        'port': port,
         'vhost': vhost,
-        'heartbeat_interval': int(heartbeat_interval),
+        'heartbeat_interval': heartbeat_interval,
         'heartbeat_topic': heartbeat_topic,
         'app_delete_rpc_name': app_delete_rpc_name,
         'app_list_rpc_name': app_list_rpc_name,

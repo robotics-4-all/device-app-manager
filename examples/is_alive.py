@@ -1,7 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from __future__ import print_function
+from __future__ import (
+    absolute_import,
+    division,
+    print_function,
+    unicode_literals
+)
 
 import sys
 import argparse
@@ -10,25 +15,14 @@ import amqp_common
 
 
 
-class AppKillMessage(amqp_common.Message):
-    __slots__ = ['header', 'app_id']
-
-    def __init__(self, app_id):
-        self.header = amqp_common.HeaderMessage()
-        self.app_id = app_id
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='AMQP RPC Client CLI.')
     parser.add_argument(
         '--device-id', dest='device_id', help='UID of the device',
         type=str, default='')
     parser.add_argument(
-        '--app-id', dest='app_id', help='Application name',
-        type=str, default='')
-    parser.add_argument(
         '--rpc-name', dest='rpc_name', help='The URI of the RPC endpoint',
-        type=str, default='thing.{}.appmanager.stop_app')
+        type=str, default='thing.{}.appmanager.is_alive')
     parser.add_argument(
         '--host',
         dest='host',
@@ -69,7 +63,6 @@ if __name__ == "__main__":
     username = args.username
     password = args.password
     device_id = args.device_id
-    app_id = args.app_id
     rpc_name = args.rpc_name
     debug = True if args.debug else False
 
@@ -77,13 +70,9 @@ if __name__ == "__main__":
         host=host, port=port, vhost=vhost)
     conn_params.credentials = amqp_common.Credentials(username, password)
 
-    if app_id == '':
-        print('[*] - Missing --app-id argument!')
-        sys.exit(1)
     rpc_name = rpc_name.format(device_id)
     rpc_client = amqp_common.RpcClient(rpc_name, connection_params=conn_params)
-    msg = AppKillMessage(app_id)
 
     rpc_client.debug = True
-    resp = rpc_client.call(msg.to_dict(), timeout=30)
+    resp = rpc_client.call({}, timeout=30)
     print('[*] - Response:\n{}'.format(resp))

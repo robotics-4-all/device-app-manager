@@ -76,7 +76,6 @@ Example `app.info`:
 name: <string>
 version: <string>
 type: "r4a_ros2_py"
-elsa_version: <string>
 description: <string>
 tags: <array_of_strings>
 ```
@@ -291,7 +290,8 @@ Starts  a pre-installed application.
   
 ```
 {
-  "app_id": <application_unique_id>
+  "app_id": <application_unique_id>,
+  "app_args": []
 }
 ```
   - Output:
@@ -303,6 +303,13 @@ Starts  a pre-installed application.
   "error": "<error_message>"
 }
 ```
+
+`app_args` can be used to pass arguments to the application.
+Array of flags/values.
+
+**Example RPC**:
+
+`start_app(app_id="test", app_args=['-l', 'a'])`
 
 #### Stop Application Service
 
@@ -325,6 +332,10 @@ Stops a running application.
 }
 ```
 
+**Example RPC**:
+
+`stop_app(app_id="test")`
+
 #### Delete Application Service
 
 Delete a pre-installed application.
@@ -346,6 +357,9 @@ Delete a pre-installed application.
 }
 ```
 
+**Example RPC**:
+
+`delete_app(app_id="test")`
 
 #### Is Alive Service
 

@@ -9,6 +9,7 @@ from __future__ import (
 
 import sys
 import os
+import json
 import argparse
 
 from device_app_manager import AppManager, load_cfg
@@ -74,6 +75,10 @@ def main():
         config['vhost'] = vhost
     if heartbeat is not None:
         config['heartbeat_interval'] = heartbeat_interval
+
+    print('==================== AppManager Configuration ====================')
+    print(json.dumps(config, indent=4, sort_keys=True))
+    print('==================================================================')
 
     manager = AppManager(
         platform_creds=(config['username'], config['password']),
