@@ -29,7 +29,8 @@ from amqp_common import (
 )
 
 from ._logging import create_logger, enable_debug, disable_debug
-from .app import *
+from .docker_builder import *
+from .docker_executor import *
 from .redis_controller import RedisController, RedisConnectionParams
 
 
