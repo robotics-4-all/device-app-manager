@@ -49,7 +49,34 @@ class RemoteLogger(object):
         self.pub.publish(msg)
 
 
+class AppManagerExecutor(object):
+    """Application Manager Executor class.
+    Not Implemented!!
+    """
+    def __init__(self):
+        pass
+
+
+
 class AppManager(object):
+    """AppManager class.
+    Implementation of the Device Application Manager as described here (TODO)
+
+    Args:
+        platform_creds (tuple): Broker (Username, Password) Tuple.
+        heartbeat_interval (int): Interval time to send heartbeat messages.
+            Not the same as AMQP heartbeats. Device Manager sends
+            heartbeat messages at a specific topic.
+        debug (bool) Enable/Disable debug mode.
+        app_build_dir (str):
+        stop_apps_on_exit (bool): Currently not supported feature!
+        keep_app_tarballls (bool):
+        app_storage_dir (str):
+        app_image_prefix (str):
+        app_list_rpc_name (str):
+        get_running_apps_rpc_name (str):
+
+    """
     APP_STORAGE_DIR = '~/.apps'
     APP_INSTALL_RPC_NAME = 'thing.x.appmanager.install_app'
     APP_DELETE_RPC_NAME = 'thing.x.appmanager.delete_app'
