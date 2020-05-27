@@ -113,7 +113,11 @@ def main():
         publish_app_logs=config['publish_app_logs'],
         publish_app_stats=config['publish_app_logs']
     )
-    manager.run()
+    try:
+        manager.run()
+    except Exception as exc:
+        print(exc)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
