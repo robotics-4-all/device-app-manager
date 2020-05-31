@@ -1,0 +1,13 @@
+[Unit]
+Description=Service for device app manager.
+# Depends on redis
+After=redis-server.service redis.service
+
+[Service]
+User=pi  # Change this
+# Set accordingly
+ExecStart=/opt/device-app-manager/bin/app_manager.py
+Restart=always
+
+[Install]
+WantedBy=default.target
