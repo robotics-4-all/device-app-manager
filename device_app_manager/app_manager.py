@@ -205,6 +205,26 @@ class AppManager(object):
             publish_logs=publish_app_logs,
             publish_stats=publish_app_stats
         )
+        self._clean_startup()
+
+    def _clean_startup(self):
+        _apps = self.redis.get_apps()
+        for app in _apps:
+            # print(app)
+            if app['state'] == 1:
+                try:
+                    app_name = app['name']
+                    _cid = self.redis.get_app_container(app_name)
+                    _c = self.docker_client.containers.get(_cid)
+                    _c.stop()
+                    _c.remove(force=True)
+                    self.redis.set_app_state(app_name, 0)
+                    self.redis.save_db()
+                except Exception as exc:
+                    self.log.error(exc, exc_info=True)
+        # _apps = self.redis.get_apps()
+        # for app in _apps:
+        #     print(app)
 
     def install_app(self, app_name, app_type, app_tarball_path):
         _app = self.app_builder.build_app(app_name, app_type, app_tarball_path)
