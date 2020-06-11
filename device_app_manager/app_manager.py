@@ -57,7 +57,6 @@ class AppManagerExecutor(object):
         pass
 
 
-
 class AppManager(object):
     """AppManager class.
     Implementation of the Device Application Manager as described here (TODO)
@@ -208,20 +207,25 @@ class AppManager(object):
         self._clean_startup()
 
     def _clean_startup(self):
+        self.log.info('Cleaning up possible zombie containers...')
         _apps = self.redis.get_apps()
         for app in _apps:
             # print(app)
             if app['state'] == 1:
                 try:
+                    self.log.info('Found zombie container! Removing...')
                     app_name = app['name']
                     _cid = self.redis.get_app_container(app_name)
                     _c = self.docker_client.containers.get(_cid)
                     _c.stop()
                     _c.remove(force=True)
-                    self.redis.set_app_state(app_name, 0)
-                    self.redis.save_db()
+                    self.log.info('Zombie container removed!')
                 except Exception as exc:
                     self.log.error(exc, exc_info=True)
+                finally:
+                    self.redis.set_app_state(app_name, 0)
+                    self.redis.save_db()
+
         # _apps = self.redis.get_apps()
         # for app in _apps:
         #     print(app)

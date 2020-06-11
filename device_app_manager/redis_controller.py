@@ -73,9 +73,16 @@ class RedisStore(MutableMapping):
 
 
 class RedisController(object):
+    """Redis Controller implementation class."""
     APP_LIST_NAME = 'appmanager.apps'
 
     def __init__(self, conn_params, app_list_name=None, auto_save=False):
+        """Constructor.
+
+        conn_params (RedisConnectionParams):
+        app_list_name (str):
+        auto_save (bool):
+        """
         self.conn_params = conn_params
         self.auto_save = auto_save
 
@@ -92,6 +99,11 @@ class RedisController(object):
         )
 
     def ping(self):
+        """Check if redis is online.
+
+        Returns:
+            (bool): True if redis server is online and False otherwise.
+        """
         try:
             self.redis.ping()
             return True
@@ -99,6 +111,7 @@ class RedisController(object):
             return False
 
     def save_db(self):
+        """Save database on disk. For persistence purposes."""
         try:
             self.redis.bgsave()
         except exceptions.ResponseError:
@@ -107,11 +120,25 @@ class RedisController(object):
             pass
 
     def get_apps(self):
+        """Returns the list of stored applications.
+
+        Returns:
+            (list):
+        """
         apps = self.redis.lrange(self.APP_LIST_NAME, 0, -1)
         apps = [json.loads(app) for app in apps]
         return apps
 
     def get_app(self, app_name):
+        """Returns a stored application given its name.
+
+        Args:
+            app_name (str): The name of the application.
+
+        Returns:
+            (dict): A dictionary that includes application information
+                as stored in database.
+        """
         apps = self.get_apps()
         for _app in apps:
             if _app['name'] == app_name:
@@ -120,10 +147,26 @@ class RedisController(object):
         raise ValueError('Application does not exist in db.')
 
     def get_app_type(self, app_name):
+        """Returns the type of the application.
+
+        Args:
+            app_name (str): The name of the application
+
+        Returns:
+            (str): The type of the application
+        """
         _app = self.get_app(app_name)
         return _app['type']
 
     def app_exists(self, app_name):
+        """Checks if application exists.
+
+        Args:
+            app_name (str): The name of the application
+
+        Returns:
+            (str): The type of the application
+        """
         apps = self.get_apps()
         for _app in apps:
             if _app['name'] == app_name:
@@ -132,6 +175,12 @@ class RedisController(object):
         return False
 
     def add_app(self, app):
+        """Add a new application to the database.
+
+        Args:
+            app (dict): The dictionary representing the application to be
+                stored in database.
+        """
         ## TODO: Validate somehow the schema of app
         created_at = int(time.time())
         app['created_at'] = created_at
@@ -142,6 +191,12 @@ class RedisController(object):
             self.save_db()
 
     def update_app(self, app):
+        """Update an application information in db.
+
+        Args:
+            app (dict): The dictionary representing the application to be
+                stored in database.
+        """
         _app = self.get_app(app['name'])
         app_index = self._get_app_index(app['name'])
 
@@ -155,6 +210,11 @@ class RedisController(object):
             self.save_db()
 
     def delete_app(self, app_name):
+        """Delete an application.
+
+        Args:
+            app_name (str): The name of the application
+        """
         # app_index = self._get_app_index(app_name)
         self.redis.lrem(self.APP_LIST_NAME, 1,
                         json.dumps(self.get_app(app_name)))
@@ -162,6 +222,13 @@ class RedisController(object):
             self.save_db()
 
     def set_app_state(self, app_name, state):
+        """Sets the state of an application.
+
+        Args:
+            app_name (str): The name of the application.
+            state (int): Number representing the state of the application
+                Set to 0 for stopped and 1 for running.
+        """
         ## States: 0 = NotRunning, 1 = Running
         if state not in (0, 1):  # Supported states
             raise ValueError('State does not exist')
@@ -192,14 +259,37 @@ class RedisController(object):
         return False
 
     def get_app_image(self, app_name):
+        """Returns the docker image information of an application.
+
+        Args:
+            app_name (str): The name of the application.
+
+        Returns:
+            (dict):
+        """
         _app = self.get_app(app_name)
         return _app['docker']['image']['name']
 
     def get_app_container(self, app_name):
+        """Returns the docker container information of an application.
+
+        Args:
+            app_name (str): The name of the application.
+
+        Returns:
+            (dict):
+        """
         _app = self.get_app(app_name)
         return _app['docker']['container']['id']
 
     def set_app_container(self, app_name, container_name, container_id):
+        """Set container information of an application.
+
+        Args:
+            app_name (str): The name of the application.
+            container_name (str): The name of the container.
+            container_id (str): The id of the container.
+        """
         _app = self.get_app(app_name)
         _app['docker']['container']['name'] = container_name
         _app['docker']['container']['id'] = container_id
@@ -209,6 +299,11 @@ class RedisController(object):
             self.save_db()
 
     def get_running_apps(self):
+        """Returns the list of currently running applications.
+
+        Returns:
+            (list):
+        """
         apps = self.get_apps()
         _r_apps = []
         for app in apps:
