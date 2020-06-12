@@ -61,6 +61,19 @@ class AppExecutorDocker(object):
                  app_stats_topic='thing.x.app.y.stats',
                  publish_logs=True, publish_stats=False
                  ):
+        """Constructor.
+
+        Args:
+            platform_params (ConnectionParameters):
+            redis_params (dict):
+            redis_app_list_name (str):
+            app_started_event (str):
+            app_stoped_event (str):
+            app_logs_topic (str):
+            app_stats_topic (str):
+            publish_logs (str):
+            publish_stats (str):
+        """
         atexit.register(self._cleanup)
 
         self.platform_params = platform_params
@@ -85,9 +98,11 @@ class AppExecutorDocker(object):
         self.log = create_logger(self.__class__.__name__)
 
     def run_app(self, app_name, app_args=[]):
-        """
-            @param app_name: str
-            @param app_args: list
+        """Run an Application.
+
+        Args:
+            app_name (str): Application name.
+            app_args (list): Application Arguments passed via stdin.
         """
         image_id = self.redis.get_app_image(app_name)
         _container_name = app_name
@@ -98,9 +113,12 @@ class AppExecutorDocker(object):
         if app_args is not None:
             docker_cmd = docker_cmd + app_args
 
-
-        _container = self._run_container(image_id, _container_name,
-                                         cmd=docker_cmd)
+        try:
+            _container = self._run_container(image_id, _container_name,
+                                             cmd=docker_cmd)
+        except Exception as exc:
+            self.log.error(exc, exc_info=True)
+            raise exc
 
         self.redis.set_app_state(app_name, 1)
         self.redis.set_app_container(app_name, _container_name, _container.id)
@@ -124,12 +142,22 @@ class AppExecutorDocker(object):
                                   exit_capture_thread))
 
     def stop_app(self, app_name):
+        """Stops application given its name
+
+        Args:
+            app_name (str): Application Name (==app-id).
+        """
         if not self.redis.app_is_running(app_name):
-            raise ValueError('Application is not running')
-        _container_name = self.redis.get_app_container(app_name)
-        self.log.debug('Killing container: {}'.format(_container_name))
-        c = self.docker_client.containers.get(_container_name)
-        c.stop()
+            raise ValueError('Application <{}> is not running'.format(app_name))
+        _container_id = self.redis.get_app_container(app_name)
+        self.log.debug('Killing container: {}'.format(_container_id))
+        c = self.docker_client.containers.get(_container_id)
+        try:
+            c.stop()
+        except docker.errors.APIError as exc:  # Not running case
+            self.log.warning(exc)
+
+        ## Call Exit handler for this application ------>
         _aidx = -1
         for i in range(len(self.running_apps)):
             if self.running_apps[i][0] == app_name:
@@ -138,12 +166,20 @@ class AppExecutorDocker(object):
             self._app_exit_handler(app_name, c)
         else:
             del self.running_apps[_aidx]
+        ## <---------------------------------------------
 
     def _cleanup(self):
         ## TODO
         pass
 
     def _run_container(self, image_id, container_name, cmd=None):
+        """Run the application container.
+
+        Args:
+            image_id (str):
+            container_name (str):
+            cmd (list):
+        """
         self.log.debug(
             'Starting application {} with cmd {}'.format(image_id, cmd))
         self.log.debug('-------- Executing within Container... --------->')
@@ -167,16 +203,18 @@ class AppExecutorDocker(object):
 
     def _app_exit_handler(self, app_name, container):
         try:
-            if self.redis.app_exists(app_name):
-                self.redis.set_app_state(app_name, 0)
-            self.redis.save_db()
-        except Exception as exc:
-            pass
-        try:
+            if not self.redis.app_exists(app_name):
+                raise RuntimeError(
+                    '[AppExitHandler] - App <{}> does not exist'.format(
+                        app_name))
             container.remove(force=True)
-        except docker.errors.APIError:
-            pass
-        self._send_app_stoped_event(app_name)
+            self.redis.set_app_state(app_name, 0)
+            self._send_app_stoped_event(app_name)
+            self.redis.save_db()
+        except docker.errors.APIError as exc:
+            self.log.error(exc, exc_info=True)
+        except Exception as exc:
+            self.log.error(exc, exc_info=True)
 
     def _send_app_stoped_event(self, app_name):
         event_uri = self.APP_STOPED_EVENT.replace(
@@ -255,18 +293,20 @@ class AppExecutorDocker(object):
                 topic_stats, connection_params=self.platform_params,
                 debug=False)
 
-        self.log.info('Initiated remote platform stats publisher: {}'.format(
-            topic_stats))
+        self.log.info(
+            'Initiated remote platform stats publisher: {}'.format(topic_stats))
 
         for line in container.stats(
                 decode=True,
                 stream=True):
             _stats_msg = line
-            self.log.debug(
-                'Sending stats of app <{}> container'.format(app_name))
+            # self.log.debug(
+            #     'Sending stats of app <{}> container'.format(app_name))
             app_stats_pub.publish(_stats_msg)
             if stop_event.is_set():
                 break
+        self.log.info(
+            'Stats Publisher stopped for Application <{}>'.format(app_name))
 
     def _detach_app_stats(self, app_name, container):
         t_stop_event = threading.Event()

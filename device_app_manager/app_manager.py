@@ -57,7 +57,6 @@ class AppManagerExecutor(object):
         pass
 
 
-
 class AppManager(object):
     """AppManager class.
     Implementation of the Device Application Manager as described here (TODO)
@@ -205,6 +204,31 @@ class AppManager(object):
             publish_logs=publish_app_logs,
             publish_stats=publish_app_stats
         )
+        self._clean_startup()
+
+    def _clean_startup(self):
+        self.log.info('Cleaning up possible zombie containers...')
+        _apps = self.redis.get_apps()
+        for app in _apps:
+            # print(app)
+            if app['state'] == 1:
+                try:
+                    self.log.info('Found zombie container! Removing...')
+                    app_name = app['name']
+                    _cid = self.redis.get_app_container(app_name)
+                    _c = self.docker_client.containers.get(_cid)
+                    _c.stop()
+                    _c.remove(force=True)
+                    self.log.info('Zombie container removed!')
+                except Exception as exc:
+                    self.log.error(exc, exc_info=True)
+                finally:
+                    self.redis.set_app_state(app_name, 0)
+                    self.redis.save_db()
+
+        # _apps = self.redis.get_apps()
+        # for app in _apps:
+        #     print(app)
 
     def install_app(self, app_name, app_type, app_tarball_path):
         _app = self.app_builder.build_app(app_name, app_type, app_tarball_path)
@@ -223,7 +247,7 @@ class AppManager(object):
 
     def delete_app(self, app_name, force_stop=False):
         if not self.redis.app_exists(app_name):
-            raise ValueError('App does not exist locally')
+            raise ValueError('App <{}> does not exist locally'.format(app_name))
 
         if self.redis.app_is_running(app_name) and force_stop:
             self.log.info('Stoping App before deleting')
@@ -236,7 +260,7 @@ class AppManager(object):
 
     def start_app(self, app_name, app_args=[]):
         if not self.redis.app_exists(app_name):
-            raise ValueError('App does not exist locally')
+            raise ValueError('App <{}> does not exist locally'.format(app_name))
 
         app = self.redis.get_app(app_name)
 
@@ -248,7 +272,7 @@ class AppManager(object):
 
     def stop_app(self, app_name):
         if not self.redis.app_exists(app_name):
-            raise ValueError('App does not exist locally')
+            raise ValueError('App <{}> does not exist locally'.format(app_name))
         self.app_executor.stop_app(app_name)
         self.log.info('App {} stopped!'.format(app_name))
 
@@ -279,8 +303,6 @@ class AppManager(object):
         _rapps = self.redis.get_running_apps()
         for _app in _rapps:
             self.stop_app(_app['name'])
-        if self._deploy_rpc:
-            self._deploy_rpc.stop()
 
         # apps = self.redis.get_apps()
         # app_idx = 0
@@ -492,13 +514,16 @@ class AppManager(object):
         try:
             if not 'app_id' in msg:
                 raise ValueError('Message schema error. app_id is not defined')
+            if msg['app_id'] == '':
+                raise ValueError('App Id is empty')
             app_name = msg['app_id']
+            if not isinstance(app_name, str):
+                raise TypeError('Parameter app_name should be of type string')
 
             if not self.redis.app_exists(app_name):
-                raise ValueError('App does not exist locally')
+                raise ValueError('App <{}> does not exist locally'.format(app_name))
 
             self.stop_app(app_name)
-
         except Exception as e:
             self.log.error(e, exc_info=True)
             resp['status'] = 404

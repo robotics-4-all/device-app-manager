@@ -51,26 +51,28 @@ Tarball contents:
 
 **Keyword**: `r4a_ros2_py`
 
-Example `init.conf`:
+**Example `init.conf`**:
 
 ```yaml
 params:
   - name: <string>
-    type: <type>
-    value: <>
+    placeholder: <string>
+    type: <datatype>
+    value: <string>
   - name: <string>
-    type: <type>
-    value: <>
+    placeholder: <string>
+    type: <datatype>
+    value: <string>
 ```
 
-where `<type>` is an enumeration and supports the following values:
+where `<datatype>` is an enumeration and supports the following values:
 
 - `string`
 - `float`
 - `int`
 - `array`
 
-Example `app.info`:
+**Example `app.info`**:
 
 ```yaml
 name: <string>
@@ -80,7 +82,7 @@ description: <string>
 tags: <array_of_strings>
 ```
 
-Example `exec.conf`:
+**Example `exec.conf`**:
 
 ```yaml
 priority: <int>
@@ -124,14 +126,17 @@ optional arguments:
 The Application manager daemon can be fully configured via a configuration file,
 located at `~/.config/device_app_manager/config`.
 
-A sample configuration file can be found at this repo under the [examples](https://github.com/robotics-4-all/device-app-manager/edit/devel/README.md) directory.
+A sample configuration file can be found at this repo under the [examples](https://github.com/robotics-4-all/device-app-manager/tree/master/examples) directory.
 
 ```ini
 [core]
 debug = 0
-deployment_basedir = /tmp/r4a-apps
+app_build_dir = /tmp/app-manager/apps/
+stop_apps_on_exit = 1
+keep_app_tarballs = 1
+app_storage_dir = ~/.apps/
 
-[platform_control_interfaces]
+[control_interfaces]
 app_install_rpc_name = thing.x.appmanager.install_app
 app_delete_rpc_name = thing.x.appmanager.delete_app
 app_list_rpc_name = thing.x.appmanager.apps
@@ -140,14 +145,23 @@ app_start_rpc_name = thing.x.appmanager.start_app
 app_stop_rpc_name = thing.x.appmanager.stop_app
 is_alive_rpc_name = thing.x.appmanager.is_alive
 
-[platform_monitoring_interfaces]
+[monitoring_interfaces]
 heartbeat_interval = 10
 heartbeat_topic = thing.x.appmanager.heartbeat
 connected_event_name = thing.x.appmanager.connected
 disconnected_event_name = thing.x.appmanager.disconnected
 
-[platform]
-host = r4a-platform.ddns.net
+[app_interfaces]
+app_started_event = thing.x.app.y.started
+app_stoped_event = thing.x.app.y.stoped
+app_logs_topic = thing.x.app.y.logs
+app_stats_topic = thing.x.app.y.stats
+publish_app_logs  = 1
+publish_app_stats = 1
+
+
+[broker]
+host = localhost
 port = 5672
 vhost = /
 rpc_exchange = DEFAULT

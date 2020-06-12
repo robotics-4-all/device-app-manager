@@ -8,7 +8,7 @@ __LOGGING = dict(
     version=1,
     formatters={
         'f': {'format':
-              '[%(asctime)s] - [%(name)s] - [%(levelname)s]: %(message)s',
+              '[%(asctime)s][%(name)s][%(levelname)s]: %(message)s',
               'datefmt': '%s'
               }
     },
