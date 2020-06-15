@@ -417,13 +417,14 @@ class AppManager(object):
         self._delete_rpc.run_threaded()
 
     def _isalive_rpc_callback(self, msg, meta):
-        self.log.info('Call <is_alive> RPC')
+        self.log.debug('Call <is_alive> RPC')
         return {
             'status': 200
         }
 
     def _install_app_rpc_callback(self, msg, meta):
         try:
+            self.log.debug('Call <install-app> RPC')
             if 'app_id' not in msg:
                 raise ValueError('Message does not include app_id property')
             if msg['app_id'] == '':
@@ -458,6 +459,7 @@ class AppManager(object):
 
     def _delete_app_rpc_callback(self, msg, meta):
         try:
+            self.log.debug('Call <delete-app> RPC')
             if 'app_id' not in msg:
                 raise ValueError('Message schema error. app_id is not defined')
             if msg['app_id'] == '':
@@ -487,6 +489,7 @@ class AppManager(object):
             'error': ''
         }
         try:
+            self.log.debug('Call <start-app> RPC')
             if 'app_id' not in msg:
                 raise ValueError('Message does not include app_id property')
             if msg['app_id'] == '':
@@ -512,6 +515,7 @@ class AppManager(object):
             'error': ''
         }
         try:
+            self.log.debug('Call <stop-app> RPC')
             if not 'app_id' in msg:
                 raise ValueError('Message schema error. app_id is not defined')
             if msg['app_id'] == '':
@@ -538,6 +542,7 @@ class AppManager(object):
             'error': ''
         }
         try:
+            self.log.debug('Call <get-apps> RPC')
             apps = self.get_apps()
             resp['apps'] = apps
             return resp
@@ -553,6 +558,7 @@ class AppManager(object):
             'error': ''
         }
         try:
+            self.log.debug('Call <get-running-apps> RPC')
             apps = self.get_running_apps()
             resp['apps'] = apps
             return resp
