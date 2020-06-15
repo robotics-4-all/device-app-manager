@@ -183,6 +183,8 @@ class AppManager(object):
             redis_app_list_name=redis_app_list_name
         )
 
+        self.docker_client = docker.from_env()
+
         self._create_app_storage_dir()
 
         self.redis = RedisController(redis_params, redis_app_list_name)
@@ -254,6 +256,8 @@ class AppManager(object):
             self.stop_app(app_name)
 
         self.log.info('Deleting Application <{}>'.format(app_name))
+        docker_app_image = self.redis.get_app_image(app_name)
+        self.docker_client.images.remove(image=docker_app_image, force=True)
         self.redis.delete_app(app_name)
         ## Save db in hdd
         self.redis.save_db()
