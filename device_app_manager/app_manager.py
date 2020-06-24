@@ -209,24 +209,39 @@ class AppManager(object):
         self._clean_startup()
 
     def _clean_startup(self):
+        self.log.info('Prune stopped containers...')
+        _c = self.docker_client.containers.prune()
         self.log.info('Cleaning up possible zombie containers...')
         _apps = self.redis.get_apps()
         for app in _apps:
             # print(app)
-            if app['state'] == 1:
+            app_name = app['name']
+            app_state = app['state']
+            _cid = self.redis.get_app_container(app_name)
+            if app_state == 1:
                 try:
                     self.log.info('Found zombie container! Removing...')
-                    app_name = app['name']
-                    _cid = self.redis.get_app_container(app_name)
                     _c = self.docker_client.containers.get(_cid)
                     _c.stop()
                     _c.remove(force=True)
                     self.log.info('Zombie container removed!')
+                except docker.errors.NotFound as exc:
+                    self.log.error(exc, exc_info=True)
                 except Exception as exc:
                     self.log.error(exc, exc_info=True)
                 finally:
                     self.redis.set_app_state(app_name, 0)
                     self.redis.save_db()
+            elif _cid not in [None, '']:
+                print(_cid)
+                try:
+                    _c = self.docker_client.containers.get(_cid)
+                    _c.remove(force=True)
+                except docker.errors.NotFound as exc:
+                    self.log.error(exc, exc_info=True)
+                except docker.errors.APIError as exc:
+                    self.log.error(exc, exc_info=True)
+
 
         # _apps = self.redis.get_apps()
         # for app in _apps:
