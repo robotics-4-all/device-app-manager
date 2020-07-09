@@ -1,0 +1,7 @@
+name: test-app
+version: 0.1.0
+elsa_version: 1.0
+description: This is a test app
+tags:
+  - test
+  - robot
