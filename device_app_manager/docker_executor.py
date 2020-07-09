@@ -31,7 +31,8 @@ from amqp_common import (
 
 DOCKER_COMMAND_MAP = {
     'py3': ['python3', '-u', 'app.py'],
-    'r4a_ros2_py': ['python3', '-u', 'app.py']
+    'r4a_ros2_py': ['python3', '-u', 'app.py'],
+    'r4a_commlib': ['python', '-u', 'app.py']
 }
 
 
