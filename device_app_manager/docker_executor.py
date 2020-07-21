@@ -28,6 +28,8 @@ from amqp_common import (
     RpcServer
 )
 
+from commlib_py.transports.redis import ActionClient, ConnectionParameters
+
 
 DOCKER_COMMAND_MAP = {
     'py3': ['python3', '-u', 'app.py'],
@@ -43,8 +45,6 @@ class DockerContainerConfig(object):
     pid_mode = 'host'
     publish_all_ports = False
     privileged = False
-
-
 
 
 class AppExecutorDocker(object):
@@ -93,6 +93,10 @@ class AppExecutorDocker(object):
         ## TODO: Might change!
         self._device_id = self.platform_params.credentials.username
         self.container_config = DockerContainerConfig()
+        self._rparams = ConnectionParameters()
+        self._speak_action_name = '/robot/robot_1/actuator/audio/speaker/usb_speaker/d0/id_0/play'
+        self._speak_action = ActionClient(conn_params=self._rparams,
+                                          action_name=self._speak_action_name)
 
     def __init_logger(self):
         """Initialize Logger."""
@@ -142,6 +146,8 @@ class AppExecutorDocker(object):
                                   log_thread, stats_thread,
                                   exit_capture_thread))
 
+        self._on_app_started(app_name)
+
     def stop_app(self, app_name):
         """Stops application given its name
 
@@ -155,6 +161,7 @@ class AppExecutorDocker(object):
         c = self.docker_client.containers.get(_container_id)
         try:
             c.stop()
+            self._on_app_stopped(app_name)
         except docker.errors.APIError as exc:  # Not running case
             self.log.warning(exc)
 
@@ -332,3 +339,27 @@ class AppExecutorDocker(object):
             'stop_event': t_stop_event
         }
         return app_exit_thread
+
+    def _on_app_started(self, app_name):
+        _text = 'Η εφαρμογή ξεκίνησε'
+        speak_goal_data = {
+            'text': _text,
+            'volume': 100,
+            'language': 'el'
+        }
+        try:
+            self._speak_action.send_goal(speak_goal_data)
+        except Exception as exc:
+            self.log.error(exc)
+
+    def _on_app_stopped(self, app_name):
+        _text = 'Η εφαρμογή τερμάτισε'
+        speak_goal_data = {
+            'text': _text,
+            'volume': 100,
+            'language': 'el'
+        }
+        try:
+            self._speak_action.send_goal(speak_goal_data)
+        except Exception as exc:
+            self.log.error(exc)
