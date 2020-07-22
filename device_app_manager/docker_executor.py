@@ -15,6 +15,7 @@ import json
 import enum
 from collections import namedtuple
 import yaml
+import time
 
 from jinja2 import Template, Environment, PackageLoader, select_autoescape
 
@@ -28,7 +29,8 @@ from amqp_common import (
     RpcServer
 )
 
-from commlib_py.transports.redis import ActionClient, ConnectionParameters
+from commlib_py.transports.redis import ActionClient
+from commlib_py.transports.redis import ConnectionParameters as RedisParams
 
 
 DOCKER_COMMAND_MAP = {
@@ -93,8 +95,8 @@ class AppExecutorDocker(object):
         ## TODO: Might change!
         self._device_id = self.platform_params.credentials.username
         self.container_config = DockerContainerConfig()
-        self._rparams = ConnectionParameters()
-        self._speak_action_name = '/robot/robot_1/actuator/audio/speaker/usb_speaker/d0/id_0/play'
+        self._rparams = RedisParams(host='localhost')
+        self._speak_action_name = '/robot/robot_1/actuator/audio/speaker/usb_speaker/d0/id_0/speak'
         self._speak_action = ActionClient(conn_params=self._rparams,
                                           action_name=self._speak_action_name)
 
@@ -161,7 +163,6 @@ class AppExecutorDocker(object):
         c = self.docker_client.containers.get(_container_id)
         try:
             c.stop()
-            self._on_app_stopped(app_name)
         except docker.errors.APIError as exc:  # Not running case
             self.log.warning(exc)
 
@@ -215,6 +216,7 @@ class AppExecutorDocker(object):
                 raise RuntimeError(
                     '[AppExitHandler] - App <{}> does not exist'.format(
                         app_name))
+            self._on_app_stopped(app_name)
             container.remove(force=True)
             self.redis.set_app_state(app_name, 0)
             self._send_app_stoped_event(app_name)
@@ -341,7 +343,7 @@ class AppExecutorDocker(object):
         return app_exit_thread
 
     def _on_app_started(self, app_name):
-        _text = 'Η εφαρμογή ξεκίνησε'
+        _text = 'Η εφαρμογή {} ξεκίνησε'.format(app_name)
         speak_goal_data = {
             'text': _text,
             'volume': 100,
@@ -353,7 +355,7 @@ class AppExecutorDocker(object):
             self.log.error(exc)
 
     def _on_app_stopped(self, app_name):
-        _text = 'Η εφαρμογή τερμάτισε'
+        _text = 'Η εφαρμογή {} τερμάτισε'.format(app_name)
         speak_goal_data = {
             'text': _text,
             'volume': 100,
