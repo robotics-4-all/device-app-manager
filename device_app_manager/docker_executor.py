@@ -62,8 +62,8 @@ class AppExecutorDocker(object):
                  app_stoped_event='thing.x.app.y.stoped',
                  app_logs_topic='thing.x.app.y.logs',
                  app_stats_topic='thing.x.app.y.stats',
-                 publish_logs=True, publish_stats=False
-                 ):
+                 publish_logs=True, publish_stats=False,
+                 sound_events=True):
         """Constructor.
 
         Args:
@@ -85,6 +85,8 @@ class AppExecutorDocker(object):
         self.APP_STARTED_EVENT = app_started_event
         self.APP_STOPED_EVENT = app_stoped_event
 
+        self.sound_events = sound_events
+
         self.docker_client = docker.from_env()
         self.docker_cli = docker.APIClient(base_url=self.DOCKER_DAEMON_URL)
         self.__init_logger()
@@ -96,9 +98,11 @@ class AppExecutorDocker(object):
         self._device_id = self.platform_params.credentials.username
         self.container_config = DockerContainerConfig()
         self._rparams = RedisParams(host='localhost')
-        self._speak_action_name = '/robot/robot_1/actuator/audio/speaker/usb_speaker/d0/id_0/speak'
-        self._speak_action = ActionClient(conn_params=self._rparams,
-                                          action_name=self._speak_action_name)
+        if self.sound_events:
+            self._speak_action_name = \
+                '/robot/robot_1/actuator/audio/speaker/usb_speaker/d0/id_0/speak'
+            self._speak_action = ActionClient(conn_params=self._rparams,
+                                              action_name=self._speak_action_name)
 
     def __init_logger(self):
         """Initialize Logger."""
@@ -349,10 +353,11 @@ class AppExecutorDocker(object):
             'volume': 50,
             'language': 'el'
         }
-        try:
-            self._speak_action.send_goal(speak_goal_data)
-        except Exception as exc:
-            self.log.error(exc)
+        if self.sound_events:
+            try:
+                self._speak_action.send_goal(speak_goal_data)
+            except Exception as exc:
+                self.log.error(exc)
 
     def _on_app_stopped(self, app_name):
         _text = 'Η εφαρμογή {} τερμάτισε'.format(app_name)
@@ -361,7 +366,8 @@ class AppExecutorDocker(object):
             'volume': 50,
             'language': 'el'
         }
-        try:
-            self._speak_action.send_goal(speak_goal_data)
-        except Exception as exc:
-            self.log.error(exc)
+        if self.sound_events:
+            try:
+                self._speak_action.send_goal(speak_goal_data)
+            except Exception as exc:
+                self.log.error(exc)
