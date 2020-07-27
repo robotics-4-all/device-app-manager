@@ -346,7 +346,7 @@ class AppExecutorDocker(object):
         _text = 'Η εφαρμογή {} ξεκίνησε'.format(app_name)
         speak_goal_data = {
             'text': _text,
-            'volume': 100,
+            'volume': 50,
             'language': 'el'
         }
         try:
@@ -358,7 +358,7 @@ class AppExecutorDocker(object):
         _text = 'Η εφαρμογή {} τερμάτισε'.format(app_name)
         speak_goal_data = {
             'text': _text,
-            'volume': 100,
+            'volume': 50,
             'language': 'el'
         }
         try:
