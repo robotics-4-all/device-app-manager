@@ -15,6 +15,7 @@ import json
 import enum
 from collections import namedtuple
 import yaml
+import time
 
 from jinja2 import Template, Environment, PackageLoader, select_autoescape
 
@@ -28,10 +29,14 @@ from amqp_common import (
     RpcServer
 )
 
+from commlib_py.transports.redis import ActionClient
+from commlib_py.transports.redis import ConnectionParameters as RedisParams
+
 
 DOCKER_COMMAND_MAP = {
     'py3': ['python3', '-u', 'app.py'],
-    'r4a_ros2_py': ['python3', '-u', 'app.py']
+    'r4a_ros2_py': ['python3', '-u', 'app.py'],
+    'r4a_commlib': ['python', '-u', 'app.py']
 }
 
 
@@ -42,8 +47,6 @@ class DockerContainerConfig(object):
     pid_mode = 'host'
     publish_all_ports = False
     privileged = False
-
-
 
 
 class AppExecutorDocker(object):
@@ -59,8 +62,8 @@ class AppExecutorDocker(object):
                  app_stoped_event='thing.x.app.y.stoped',
                  app_logs_topic='thing.x.app.y.logs',
                  app_stats_topic='thing.x.app.y.stats',
-                 publish_logs=True, publish_stats=False
-                 ):
+                 publish_logs=True, publish_stats=False,
+                 sound_events=True):
         """Constructor.
 
         Args:
@@ -82,6 +85,8 @@ class AppExecutorDocker(object):
         self.APP_STARTED_EVENT = app_started_event
         self.APP_STOPED_EVENT = app_stoped_event
 
+        self.sound_events = sound_events
+
         self.docker_client = docker.from_env()
         self.docker_cli = docker.APIClient(base_url=self.DOCKER_DAEMON_URL)
         self.__init_logger()
@@ -92,6 +97,12 @@ class AppExecutorDocker(object):
         ## TODO: Might change!
         self._device_id = self.platform_params.credentials.username
         self.container_config = DockerContainerConfig()
+        self._rparams = RedisParams(host='localhost')
+        if self.sound_events:
+            self._speak_action_name = \
+                '/robot/robot_1/actuator/audio/speaker/usb_speaker/d0/id_0/speak'
+            self._speak_action = ActionClient(conn_params=self._rparams,
+                                              action_name=self._speak_action_name)
 
     def __init_logger(self):
         """Initialize Logger."""
@@ -140,6 +151,8 @@ class AppExecutorDocker(object):
         self.running_apps.append((app_name, _container_name, _container,
                                   log_thread, stats_thread,
                                   exit_capture_thread))
+
+        self._on_app_started(app_name)
 
     def stop_app(self, app_name):
         """Stops application given its name
@@ -207,6 +220,7 @@ class AppExecutorDocker(object):
                 raise RuntimeError(
                     '[AppExitHandler] - App <{}> does not exist'.format(
                         app_name))
+            self._on_app_stopped(app_name)
             container.remove(force=True)
             self.redis.set_app_state(app_name, 0)
             self._send_app_stoped_event(app_name)
@@ -331,3 +345,29 @@ class AppExecutorDocker(object):
             'stop_event': t_stop_event
         }
         return app_exit_thread
+
+    def _on_app_started(self, app_name):
+        _text = 'Η εφαρμογή {} ξεκίνησε'.format(app_name)
+        speak_goal_data = {
+            'text': _text,
+            'volume': 50,
+            'language': 'el'
+        }
+        if self.sound_events:
+            try:
+                self._speak_action.send_goal(speak_goal_data)
+            except Exception as exc:
+                self.log.error(exc)
+
+    def _on_app_stopped(self, app_name):
+        _text = 'Η εφαρμογή {} τερμάτισε'.format(app_name)
+        speak_goal_data = {
+            'text': _text,
+            'volume': 50,
+            'language': 'el'
+        }
+        if self.sound_events:
+            try:
+                self._speak_action.send_goal(speak_goal_data)
+            except Exception as exc:
+                self.log.error(exc)

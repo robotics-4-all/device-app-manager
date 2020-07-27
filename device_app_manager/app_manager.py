@@ -183,6 +183,8 @@ class AppManager(object):
             redis_app_list_name=redis_app_list_name
         )
 
+        self.docker_client = docker.from_env()
+
         self._create_app_storage_dir()
 
         self.redis = RedisController(redis_params, redis_app_list_name)
@@ -207,24 +209,39 @@ class AppManager(object):
         self._clean_startup()
 
     def _clean_startup(self):
+        self.log.info('Prune stopped containers...')
+        _c = self.docker_client.containers.prune()
         self.log.info('Cleaning up possible zombie containers...')
         _apps = self.redis.get_apps()
         for app in _apps:
             # print(app)
-            if app['state'] == 1:
+            app_name = app['name']
+            app_state = app['state']
+            _cid = self.redis.get_app_container(app_name)
+            if app_state == 1:
                 try:
                     self.log.info('Found zombie container! Removing...')
-                    app_name = app['name']
-                    _cid = self.redis.get_app_container(app_name)
                     _c = self.docker_client.containers.get(_cid)
                     _c.stop()
                     _c.remove(force=True)
                     self.log.info('Zombie container removed!')
+                except docker.errors.NotFound as exc:
+                    self.log.error(exc, exc_info=True)
                 except Exception as exc:
                     self.log.error(exc, exc_info=True)
                 finally:
                     self.redis.set_app_state(app_name, 0)
                     self.redis.save_db()
+            elif _cid not in [None, '']:
+                print(_cid)
+                try:
+                    _c = self.docker_client.containers.get(_cid)
+                    _c.remove(force=True)
+                except docker.errors.NotFound as exc:
+                    self.log.error(exc, exc_info=True)
+                except docker.errors.APIError as exc:
+                    self.log.error(exc, exc_info=True)
+
 
         # _apps = self.redis.get_apps()
         # for app in _apps:
@@ -254,6 +271,8 @@ class AppManager(object):
             self.stop_app(app_name)
 
         self.log.info('Deleting Application <{}>'.format(app_name))
+        docker_app_image = self.redis.get_app_image(app_name)
+        self.docker_client.images.remove(image=docker_app_image, force=True)
         self.redis.delete_app(app_name)
         ## Save db in hdd
         self.redis.save_db()
@@ -417,13 +436,14 @@ class AppManager(object):
         self._delete_rpc.run_threaded()
 
     def _isalive_rpc_callback(self, msg, meta):
-        self.log.info('Call <is_alive> RPC')
+        self.log.debug('Call <is_alive> RPC')
         return {
             'status': 200
         }
 
     def _install_app_rpc_callback(self, msg, meta):
         try:
+            self.log.debug('Call <install-app> RPC')
             if 'app_id' not in msg:
                 raise ValueError('Message does not include app_id property')
             if msg['app_id'] == '':
@@ -458,6 +478,7 @@ class AppManager(object):
 
     def _delete_app_rpc_callback(self, msg, meta):
         try:
+            self.log.debug('Call <delete-app> RPC')
             if 'app_id' not in msg:
                 raise ValueError('Message schema error. app_id is not defined')
             if msg['app_id'] == '':
@@ -487,6 +508,7 @@ class AppManager(object):
             'error': ''
         }
         try:
+            self.log.debug('Call <start-app> RPC')
             if 'app_id' not in msg:
                 raise ValueError('Message does not include app_id property')
             if msg['app_id'] == '':
@@ -512,6 +534,7 @@ class AppManager(object):
             'error': ''
         }
         try:
+            self.log.debug('Call <stop-app> RPC')
             if not 'app_id' in msg:
                 raise ValueError('Message schema error. app_id is not defined')
             if msg['app_id'] == '':
@@ -538,6 +561,7 @@ class AppManager(object):
             'error': ''
         }
         try:
+            self.log.debug('Call <get-apps> RPC')
             apps = self.get_apps()
             resp['apps'] = apps
             return resp
@@ -553,6 +577,7 @@ class AppManager(object):
             'error': ''
         }
         try:
+            self.log.debug('Call <get-running-apps> RPC')
             apps = self.get_running_apps()
             resp['apps'] = apps
             return resp

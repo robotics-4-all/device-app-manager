@@ -21,8 +21,6 @@ from jinja2 import Template, Environment, PackageLoader, select_autoescape
 from ._logging import create_logger
 from .redis_controller import RedisController
 from .app_model import AppModel
-from .docker_executor import *
-from .docker_builder import *
 
 from amqp_common import (
     ConnectionParameters,
@@ -35,6 +33,7 @@ from amqp_common import (
 DOCKERFILE_TPL_MAP = {
     'py3': 'Dockerfile.py3.tpl',
     'r4a_ros2_py': 'Dockerfile.r4a_ros2_py.tpl',
+    'r4a_commlib': 'Dockerfile.r4a_commlib.tpl'
     # 'ros2_package': 'Dockerfile.ros2_package.tpl'  ## Not yet supported
 }
 
@@ -74,7 +73,7 @@ class AppBuilderDocker(object):
 
         self._build_image(app_dir, image_name)
 
-        if app_type == 'r4a_ros2_py':
+        if app_type in ('r4a_ros2_py', 'r4a_commlib'):
             init_params = self._read_init_params(
                 os.path.join(app_dir, 'app', self.APP_INIT_FILE_NAME))
             app_info = self._read_app_info(
