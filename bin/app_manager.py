@@ -74,7 +74,7 @@ def main():
     if vhost is not None:
         config['vhost'] = vhost
     if heartbeat is not None:
-        config['heartbeat_interval'] = heartbeat_interval
+        config['heartbeat_interval'] = heartbeat
 
     print('==================== AppManager Configuration ====================')
     print(json.dumps(config, indent=4, sort_keys=True))
