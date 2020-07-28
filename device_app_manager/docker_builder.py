@@ -1,10 +1,3 @@
-from __future__ import (
-    absolute_import,
-    division,
-    print_function,
-    unicode_literals
-)
-
 import os
 import uuid
 import docker
@@ -22,11 +15,8 @@ from ._logging import create_logger
 from .redis_controller import RedisController
 from .app_model import AppModel
 
-from amqp_common import (
-    ConnectionParameters,
-    Credentials,
-    PublisherSync,
-    RpcServer
+from commlib.transports.amqp import (
+    Publisher, RPCService
 )
 
 
@@ -48,9 +38,7 @@ class AppBuilderDocker(object):
     APP_INFO_FILE_NAME = 'app.info'
     SCHEDULER_FILE_NAME = 'exec.conf'
 
-    def __init__(self, image_prefix='app',
-                 build_dir='/tmp/app-manager/apps/',
-                 ):
+    def __init__(self, image_prefix='app', build_dir='/tmp/app-manager/apps/'):
         self.IMAGE_NAME_PREFIX = image_prefix
         self.BUILD_DIR = build_dir
 

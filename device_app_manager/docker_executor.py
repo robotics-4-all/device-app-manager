@@ -1,10 +1,3 @@
-from __future__ import (
-    absolute_import,
-    division,
-    print_function,
-    unicode_literals
-)
-
 import os
 import uuid
 import docker
@@ -22,15 +15,10 @@ from jinja2 import Template, Environment, PackageLoader, select_autoescape
 from ._logging import create_logger
 from .redis_controller import RedisController
 
-from amqp_common import (
-    ConnectionParameters,
-    Credentials,
-    PublisherSync,
-    RpcServer
-)
+from commlib.transports.amqp import Publisher
 
-from commlib_py.transports.redis import ActionClient
-from commlib_py.transports.redis import ConnectionParameters as RedisParams
+from commlib.transports.redis import ActionClient
+from commlib.transports.redis import ConnectionParameters as RedisParams
 
 
 DOCKER_COMMAND_MAP = {
@@ -234,30 +222,28 @@ class AppExecutorDocker(object):
         event_uri = self.APP_STOPED_EVENT.replace(
             'x', self._device_id).replace('y', app_name)
 
-        p = PublisherSync(
-            event_uri,
+        p = Publisher(
+            topic=event_uri,
             connection_params=self.platform_params,
             debug=False
         )
         p.publish({})
         self.log.debug(
             'Send <app_stopped> event for application {}'.format(app_name))
-        p.close()
         del p
 
     def _send_app_started_event(self, app_name):
         event_uri = self.APP_STARTED_EVENT.replace(
             'x', self._device_id).replace('y', app_name)
 
-        p = PublisherSync(
-            event_uri,
+        p = Publisher(
+            topic=event_uri,
             connection_params=self.platform_params,
             debug=False
         )
         p.publish({})
         self.log.debug(
             'Sent <app_started> event for application {}'.format(app_name))
-        p.close()
         del p
 
     def _detach_app_logging(self, app_name, container):
@@ -276,9 +262,9 @@ class AppExecutorDocker(object):
         topic_logs = self.PLATFORM_APP_LOGS_TOPIC_TPL.replace(
                 'x', self._device_id).replace(
                         'y', app_name)
-        app_logs_pub = PublisherSync(
-                topic_logs, connection_params=self.platform_params,
-                debug=False)
+        app_logs_pub = Publisher(topic_name=topic_logs,
+                                 connection_params=self.platform_params,
+                                 debug=False)
 
         self.log.info('Initiated remote platform log publisher: {}'.format(
             topic_logs))
@@ -303,9 +289,9 @@ class AppExecutorDocker(object):
                 'x', self._device_id).replace(
                         'y', app_name)
 
-        app_stats_pub = PublisherSync(
-                topic_stats, connection_params=self.platform_params,
-                debug=False)
+        app_stats_pub = Publisher(topic_name=topic_stats,
+                                  connection_params=self.platform_params,
+                                  debug=False)
 
         self.log.info(
             'Initiated remote platform stats publisher: {}'.format(topic_stats))

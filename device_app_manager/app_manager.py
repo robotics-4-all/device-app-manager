@@ -1,10 +1,3 @@
-from __future__ import (
-    absolute_import,
-    division,
-    print_function,
-    unicode_literals
-)
-
 import sys
 import os
 import uuid
@@ -14,47 +7,57 @@ import json
 import subprocess
 import shutil
 import shlex
+import threading
 # from collections import namedtuple
-
 import base64
-
-import redis
+import atexit
 import json
 
-from amqp_common import (
-    ConnectionParameters,
-    Credentials,
-    PublisherSync,
-    RpcServer
+import redis
+import docker
+
+from commlib.transports.amqp import (
+    Publisher, ConnectionParameters, RPCService
 )
 
 from ._logging import create_logger, enable_debug, disable_debug
-from .docker_builder import *
-from .docker_executor import *
+from .docker_builder import AppBuilderDocker
+from .docker_executor import AppExecutorDocker
 from .redis_controller import RedisController, RedisConnectionParams
 
 
-class RemoteLogger(object):
-    def __init__(self, platform_connection_params=None, topic=None):
-        if topic is None:
-            u_id = uuid.uuid4().hex[0:8]
-            topic = 'logs.{}'.format(u_id)
-        self.topic = topic
-        self.pub = PublisherSync(
-            topic=self.topic,
-            connection_params=platform_connection_params,
-            debug=False)
+class HeartbeatThread(threading.Thread):
+    def __init__(self, topic, conn_params, interval=10,  *args, **kwargs):
+        super(HeartbeatThread, self).__init__(*args, **kwargs)
+        self._stop_event = threading.Event()
+        self._rate_secs = interval
+        self._heartbeat_pub = Publisher(
+            topic=topic,
+            conn_params=conn_params,
+            debug=False
+        )
+        self.daemon = True
 
-    def log(self, msg):
-        self.pub.publish(msg)
+    def run(self):
+        try:
+            while not self._stop_event.isSet():
+                self._heartbeat_pub.publish({})
+                self._stop_event.wait(self._rate_secs)
+        except Exception as exc:
+            print('Heartbeat Thread Ended')
+        finally:
+            print('Heartbeat Thread Ended')
 
+    def force_join(self, timeout=None):
+        """ Stop the thread. """
+        self._stop_event.set()
+        threading.Thread.join(self, timeout)
 
-class AppManagerExecutor(object):
-    """Application Manager Executor class.
-    Not Implemented!!
-    """
-    def __init__(self):
-        pass
+    def stop(self):
+        self._stop_event.set()
+
+    def stopped(self):
+        return self._stop_event.is_set()
 
 
 class AppManager(object):
@@ -124,12 +127,11 @@ class AppManager(object):
                  app_logs_topic=None,
                  app_stats_topic=None,
                  publish_app_logs=None,
-                 publish_app_stats=None,
-                 ):
+                 publish_app_stats=None):
         atexit.register(self._cleanup)
 
         self.platform_creds = platform_creds
-        self.heartbeat_interval = heartbeat_interval
+        self.HEARTBEAT_INTERVAL = heartbeat_interval
         if app_list_rpc_name is not None:
             self.APP_LIST_RPC_NAME = app_list_rpc_name
         if app_delete_rpc_name is not None:
@@ -242,11 +244,6 @@ class AppManager(object):
                 except docker.errors.APIError as exc:
                     self.log.error(exc, exc_info=True)
 
-
-        # _apps = self.redis.get_apps()
-        # for app in _apps:
-        #     print(app)
-
     def install_app(self, app_name, app_type, app_tarball_path):
         _app = self.app_builder.build_app(app_name, app_type, app_tarball_path)
 
@@ -310,8 +307,8 @@ class AppManager(object):
         self.broker_conn_params = ConnectionParameters(
                 host=self.PLATFORM_HOST, port=self.PLATFORM_PORT,
                 vhost=self.PLATFORM_VHOST)
-        self.broker_conn_params.credentials = Credentials(
-                self.platform_creds[0], self.platform_creds[1])
+        self.broker_conn_params.credentials.username = self.platform_creds[0]
+        self.broker_conn_params.credentials.password = self.platform_creds[1]
 
     def __init_logger(self):
         """Initialize Logger."""
@@ -323,27 +320,16 @@ class AppManager(object):
         for _app in _rapps:
             self.stop_app(_app['name'])
 
-        # apps = self.redis.get_apps()
-        # app_idx = 0
-        # for app in apps:
-        #     self.redis.set_app_state(app['name'], 0)
-
     def _create_app_storage_dir(self):
         if not os.path.exists(self.APP_STORAGE_DIR):
             os.mkdir(self.APP_STORAGE_DIR)
 
     def _init_heartbeat_pub(self):
-        self._heartbeat_pub = PublisherSync(
-            topic=self.HEARTBEAT_TOPIC.replace(
-                'x', self.platform_creds[0]),
-            connection_params=self.broker_conn_params,
-            debug=False
+        self._heartbeat_thread = HeartbeatThread(
+            self.HEARTBEAT_TOPIC.replace('x', self.platform_creds[0]),
+            self.broker_conn_params,
+            interval=self.HEARTBEAT_INTERVAL
         )
-        self._heartbeat_thread = threading.Thread(
-            target=self._heartbeat_pub.pub_loop,
-            args=(self._heartbeat_data, 1.0 / self.heartbeat_interval)
-        )
-        self._heartbeat_thread.daemon = True
         self._heartbeat_thread.start()
 
     def _init_rpc_endpoints(self):
@@ -360,80 +346,68 @@ class AppManager(object):
 
     def _init_isalive_rpc(self):
         rpc_name = self.ISALIVE_RPC_NAME.replace('x', self.platform_creds[0])
-
-        self._isalive_rpc = RpcServer(
-            rpc_name,
+        self._isalive_rpc = RPCService(
+            rpc_name=rpc_name,
             on_request=self._isalive_rpc_callback,
-            connection_params=self.broker_conn_params,
+            conn_params=self.broker_conn_params,
             debug=self.debug)
-
-        self._isalive_rpc.run_threaded()
+        self._isalive_rpc.run()
 
     def _init_app_list_rpc(self):
         rpc_name = self.APP_LIST_RPC_NAME.replace('x', self.platform_creds[0])
-
-        self._app_list_rpc = RpcServer(
-            rpc_name,
+        self._app_list_rpc = RPCService(
+            rpc_name=rpc_name,
             on_request=self._get_apps_rpc_callback,
-            connection_params=self.broker_conn_params,
+            conn_params=self.broker_conn_params,
             debug=self.debug)
-
-        self._app_list_rpc.run_threaded()
+        self._app_list_rpc.run()
 
     def _init_get_running_apps_rpc(self):
         rpc_name = self.GET_RUNNING_APPS_RPC_NAME.replace('x', self.platform_creds[0])
-
-        self._running_apps_rpc = RpcServer(
-            rpc_name,
+        self._running_apps_rpc = RPCService(
+            rpc_name=rpc_name,
             on_request=self._get_running_apps_rpc_callback,
-            connection_params=self.broker_conn_params,
+            conn_params=self.broker_conn_params,
             debug=self.debug)
-
-        self._running_apps_rpc.run_threaded()
+        self._running_apps_rpc.run()
 
     def _init_app_install_rpc(self):
         rpc_name = self.APP_INSTALL_RPC_NAME.replace(
                 'x', self.platform_creds[0])
-
-        self._install_rpc = RpcServer(
-            rpc_name,
+        self._install_rpc = RPCService(
+            rpc_name=rpc_name,
             on_request=self._install_app_rpc_callback,
-            connection_params=self.broker_conn_params,
+            conn_params=self.broker_conn_params,
             debug=self.debug)
-
-        self._install_rpc.run_threaded()
+        self._install_rpc.run()
 
     def _init_app_start_rpc(self):
         rpc_name = self.APP_START_RPC_NAME.replace(
                 'x', self.platform_creds[0])
-
-        self._start_rpc = RpcServer(
-            rpc_name,
+        self._start_rpc = RPCService(
+            rpc_name=rpc_name,
             on_request=self._start_app_rpc_callback,
-            connection_params=self.broker_conn_params,
+            conn_params=self.broker_conn_params,
             debug=self.debug)
-
-        self._start_rpc.run_threaded()
+        self._start_rpc.run()
 
     def _init_app_stop_rpc(self):
         rpc_name = self.APP_STOP_RPC_NAME.replace('x', self.platform_creds[0])
-        self._stop_rpc = RpcServer(
-            rpc_name,
+        self._stop_rpc = RPCService(
+            rpc_name=rpc_name,
             on_request=self._stop_app_rpc_callback,
-            connection_params=self.broker_conn_params,
+            conn_params=self.broker_conn_params,
             debug=self.debug)
-
-        self._stop_rpc.run_threaded()
+        self._stop_rpc.run()
 
     def _init_app_delete_rpc(self):
         rpc_name = self.APP_DELETE_RPC_NAME.replace('x', self.platform_creds[0])
-        self._delete_rpc = RpcServer(
-            rpc_name,
+        self._delete_rpc = RPCService(
+            rpc_name=rpc_name,
             on_request=self._delete_app_rpc_callback,
-            connection_params=self.broker_conn_params,
+            conn_params=self.broker_conn_params,
             debug=self.debug)
-
-        self._delete_rpc.run_threaded()
+        self._delete_rpc.run()
 
     def _isalive_rpc_callback(self, msg, meta):
         self.log.debug('Call <is_alive> RPC')
@@ -587,25 +561,23 @@ class AppManager(object):
             return resp
 
     def _send_connected_event(self):
-        p = PublisherSync(
-            self.THING_CONNECTED_EVENT.replace(
+        p = Publisher(
+            topic=self.THING_CONNECTED_EVENT.replace(
                 'x', self.platform_creds[0]),
-            connection_params=self.broker_conn_params,
+            conn_params=self.broker_conn_params,
             debug=False
         )
         p.publish({})
-        p.close()
         del p
 
     def _send_disconnected_event(self):
-        p = PublisherSync(
-            self.THING_DISCONNECTED_EVENT.replace(
+        p = Publisher(
+            topic=self.THING_DISCONNECTED_EVENT.replace(
                 'x', self.platform_creds[0]),
-            connection_params=self.broker_conn_params,
+            conn_params=self.broker_conn_params,
             debug=False
         )
         p.publish({})
-        p.close()
         del p
 
     def _store_app_tar(self, tar_b64, dest_dir):
@@ -618,6 +590,7 @@ class AppManager(object):
         with open(tarball_path, 'wb') as f:
             f.write(tarball_decoded)
             return tarball_path
+
     def run(self):
         try:
             self._init_rpc_endpoints()
