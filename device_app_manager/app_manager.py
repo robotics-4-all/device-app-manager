@@ -85,6 +85,7 @@ class AppManager(object):
     APP_START_RPC_NAME = 'thing.x.appmanager.start_app'
     APP_STOP_RPC_NAME = 'thing.x.appmanager.stop_app'
     APP_LIST_RPC_NAME = 'thing.x.appmanager.apps'
+    APP_FAST_DEPLOY_RPC_NAME = 'thing.x.appmanager.fast_deploy'
     ISALIVE_RPC_NAME = 'thing.x.appmanager.is_alive'
     GET_RUNNING_APPS_RPC_NAME = 'thing.x.appmanager.apps.running'
     HEARTBEAT_TOPIC = 'thing.x.appmanager.heartbeat'
@@ -110,6 +111,7 @@ class AppManager(object):
                  app_install_rpc_name=None,
                  app_start_rpc_name=None,
                  app_stop_rpc_name=None,
+                 app_fast_deploy_rpc_name=None,
                  alive_rpc_name=None,
                  heartbeat_topic=None,
                  connected_event=None,
@@ -144,6 +146,8 @@ class AppManager(object):
             self.APP_START_RPC_NAME = app_start_rpc_name
         if app_stop_rpc_name is not None:
             self.APP_STOP_RPC_NAME = app_stop_rpc_name
+        if app_fast_deploy_rpc_name is not None:
+            self.APP_FAST_DEPLOY_RPC_NAME = app_fast_deploy_rpc_name
         if alive_rpc_name is not None:
             self.ISALIVE_RPC_NAME = alive_rpc_name
         if get_running_apps_rpc_name is not None:
@@ -303,6 +307,10 @@ class AppManager(object):
                 _r_apps.append(app)
         return _r_apps
 
+    def fast_deploy(self, app_name, app_type, app_tarball_path):
+        self.install_app(app_name, app_type, app_tarball_path)
+        self.start_app(app_name)
+
     def _init_platform_params(self):
         self.broker_conn_params = ConnectionParameters(
                 host=self.PLATFORM_HOST, port=self.PLATFORM_PORT,
@@ -343,6 +351,7 @@ class AppManager(object):
         self._init_app_list_rpc()
         self._init_app_delete_rpc()
         self._init_get_running_apps_rpc()
+        self._init_app_fast_deploy_rpc()
 
     def _init_isalive_rpc(self):
         rpc_name = self.ISALIVE_RPC_NAME.replace('x', self.platform_creds[0])
@@ -408,6 +417,15 @@ class AppManager(object):
             conn_params=self.broker_conn_params,
             debug=self.debug)
         self._delete_rpc.run()
+
+    def _init_app_fast_deploy_rpc(self):
+        rpc_name = self.APP_FAST_DEPLOY_RPC_NAME.replace('x', self.platform_creds[0])
+        self._fast_deploy_rpc = RPCService(
+            rpc_name=rpc_name,
+            on_request=self._fast_deploy_rpc_callback,
+            conn_params=self.broker_conn_params,
+            debug=self.debug)
+        self._fast_deploy_rpc.run()
 
     def _isalive_rpc_callback(self, msg, meta):
         self.log.debug('Call <is_alive> RPC')
@@ -521,6 +539,46 @@ class AppManager(object):
                 raise ValueError('App <{}> does not exist locally'.format(app_name))
 
             self.stop_app(app_name)
+        except Exception as e:
+            self.log.error(e, exc_info=True)
+            resp['status'] = 404
+            resp['error'] = str(e)
+        finally:
+            return resp
+
+    def _fast_deploy_rpc_callback(self, msg, meta):
+        resp = {
+            'status': 200,
+            'error': ''
+        }
+        try:
+            self.log.debug('Call <fast-deploy> RPC')
+            if not 'app_id' in msg:
+                raise ValueError('Message schema error. app_id is not defined')
+            if msg['app_id'] == '':
+                raise ValueError('App Id is empty')
+            app_name = msg['app_id']
+            if not isinstance(app_name, str):
+                raise TypeError('Parameter app_name should be of type string')
+            if not 'app_type' in msg:
+                raise ValueError(
+                    'Message schema error. app_type is not defined')
+            if msg['app_type'] == '':
+                raise ValueError('App Type is empty')
+            app_type = msg['app_type']
+            if not isinstance(app_type, str):
+                raise TypeError('Parameter app_type should be of type string')
+            if not 'app_tarball' in msg:
+                raise ValueError(
+                    'Message schema error. app_tarball is not defined')
+            if msg['app_tarball'] == '':
+                raise ValueError('App Tarball is empty')
+            app_tar = msg['app_tarball']
+            tarball_b64 =  app_tar['data']
+            tarball_path = self._store_app_tar(
+                tarball_b64, self.APP_STORAGE_DIR)
+            self.fast_deploy(app_name, app_type, tarball_path)
+
         except Exception as e:
             self.log.error(e, exc_info=True)
             resp['status'] = 404

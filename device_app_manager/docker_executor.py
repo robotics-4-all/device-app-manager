@@ -224,7 +224,7 @@ class AppExecutorDocker(object):
 
         p = Publisher(
             topic=event_uri,
-            connection_params=self.platform_params,
+            conn_params=self.platform_params,
             debug=False
         )
         p.publish({})
@@ -238,7 +238,7 @@ class AppExecutorDocker(object):
 
         p = Publisher(
             topic=event_uri,
-            connection_params=self.platform_params,
+            conn_params=self.platform_params,
             debug=False
         )
         p.publish({})
@@ -262,8 +262,8 @@ class AppExecutorDocker(object):
         topic_logs = self.PLATFORM_APP_LOGS_TOPIC_TPL.replace(
                 'x', self._device_id).replace(
                         'y', app_name)
-        app_logs_pub = Publisher(topic_name=topic_logs,
-                                 connection_params=self.platform_params,
+        app_logs_pub = Publisher(topic=topic_logs,
+                                 conn_params=self.platform_params,
                                  debug=False)
 
         self.log.info('Initiated remote platform log publisher: {}'.format(
@@ -289,8 +289,8 @@ class AppExecutorDocker(object):
                 'x', self._device_id).replace(
                         'y', app_name)
 
-        app_stats_pub = Publisher(topic_name=topic_stats,
-                                  connection_params=self.platform_params,
+        app_stats_pub = Publisher(topic=topic_stats,
+                                  conn_params=self.platform_params,
                                   debug=False)
 
         self.log.info(
