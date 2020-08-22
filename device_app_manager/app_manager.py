@@ -20,7 +20,8 @@ from commlib.transports.amqp import (
     Publisher, ConnectionParameters, RPCService
 )
 
-from ._logging import create_logger, enable_debug, disable_debug
+from commlib.logger import Logger
+
 from .docker_builder import AppBuilderDocker
 from .docker_executor import AppExecutorDocker
 from .redis_controller import RedisController, RedisConnectionParams
@@ -320,7 +321,7 @@ class AppManager(object):
 
     def __init_logger(self):
         """Initialize Logger."""
-        self.log = create_logger('Thing-AppManager')
+        self.log = Logger('Thing-AppManager')
 
     def _cleanup(self):
         self._send_disconnected_event()
