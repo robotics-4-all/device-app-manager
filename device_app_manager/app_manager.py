@@ -202,6 +202,7 @@ class AppManager(object):
             build_dir=app_build_dir,
             image_prefix=app_image_prefix
         )
+
         self.app_executor = AppExecutorDocker(
             self.broker_conn_params,
             redis_params,
