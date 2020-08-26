@@ -109,7 +109,7 @@ def main():
         app_started_event=config['app_started_event'],
         app_stoped_event=config['app_stoped_event'],
         app_logs_topic=config['app_logs_topic'],
-        app_stats_topic=config['app_logs_topic'],
+        app_stats_topic=config['app_stats_topic'],
         publish_app_logs=config['publish_app_logs'],
         publish_app_stats=config['publish_app_logs']
     )
