@@ -309,9 +309,9 @@ class AppManager(object):
                 _r_apps.append(app)
         return _r_apps
 
-    def fast_deploy(self, app_name, app_type, app_tarball_path):
+    def fast_deploy(self, app_name, app_type, app_tarball_path, app_args=[]):
         self.install_app(app_name, app_type, app_tarball_path)
-        self.start_app(app_name)
+        self.start_app(app_name, app_args=app_args)
 
     def _init_platform_params(self):
         self.broker_conn_params = ConnectionParameters(
@@ -575,11 +575,16 @@ class AppManager(object):
                     'Message schema error. app_tarball is not defined')
             if msg['app_tarball'] == '':
                 raise ValueError('App Tarball is empty')
+            if 'app_args' in msg:
+                app_args = msg['app_args']
+            else:
+                app_args = []
+            print(app_args)
             app_tar = msg['app_tarball']
             tarball_b64 =  app_tar['data']
             tarball_path = self._store_app_tar(
                 tarball_b64, self.APP_STORAGE_DIR)
-            self.fast_deploy(app_name, app_type, tarball_path)
+            self.fast_deploy(app_name, app_type, tarball_path, app_args)
 
         except Exception as e:
             self.log.error(e, exc_info=True)
