@@ -45,9 +45,11 @@ class HeartbeatThread(threading.Thread):
                 self._heartbeat_pub.publish({})
                 self._stop_event.wait(self._rate_secs)
         except Exception as exc:
-            print('Heartbeat Thread Ended')
+            # print('Heartbeat Thread Ended')
+            pass
         finally:
-            print('Heartbeat Thread Ended')
+            # print('Heartbeat Thread Ended')
+            pass
 
     def force_join(self, timeout=None):
         """ Stop the thread. """
@@ -222,7 +224,6 @@ class AppManager(object):
         self.log.info('Cleaning up possible zombie containers...')
         _apps = self.redis.get_apps()
         for app in _apps:
-            # print(app)
             app_name = app['name']
             app_state = app['state']
             _cid = self.redis.get_app_container(app_name)
@@ -241,7 +242,6 @@ class AppManager(object):
                     self.redis.set_app_state(app_name, 0)
                     self.redis.save_db()
             elif _cid not in [None, '']:
-                print(_cid)
                 try:
                     _c = self.docker_client.containers.get(_cid)
                     _c.remove(force=True)
@@ -579,7 +579,6 @@ class AppManager(object):
                 app_args = msg['app_args']
             else:
                 app_args = []
-            print(app_args)
             app_tar = msg['app_tarball']
             tarball_b64 =  app_tar['data']
             tarball_path = self._store_app_tar(
