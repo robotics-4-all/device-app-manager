@@ -107,7 +107,7 @@ def main():
         keep_app_tarballls=config['keep_app_tarballls'],
         app_storage_dir=config['app_storage_dir'],
         app_started_event=config['app_started_event'],
-        app_stoped_event=config['app_stoped_event'],
+        app_stopped_event=config['app_stopped_event'],
         app_logs_topic=config['app_logs_topic'],
         app_stats_topic=config['app_stats_topic'],
         publish_app_logs=config['publish_app_logs'],

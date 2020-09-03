@@ -135,9 +135,9 @@ def load_cfg(cfg_file):
     except configparser.NoOptionError:
         app_started_event = 'thing.x.app.y.started'
     try:
-        app_stoped_event = config.get('app_interfaces', 'app_stoped_event')
+        app_stopped_event = config.get('app_interfaces', 'app_stopped_event')
     except configparser.NoOptionError:
-        app_stoped_event = 'thing.x.app.y.stoped'
+        app_stopped_event = 'thing.x.app.y.stopped'
     try:
         app_logs_topic = config.get('app_interfaces', 'app_logs_topic')
     except configparser.NoOptionError:
@@ -209,7 +209,7 @@ def load_cfg(cfg_file):
         'redis_password': redis_password,
         'redis_app_list_name': redis_app_list_name,
         'app_started_event': app_started_event,
-        'app_stoped_event': app_stoped_event,
+        'app_stopped_event': app_stopped_event,
         'app_logs_topic': app_logs_topic,
         'app_stats_topic': app_stats_topic,
         'publish_app_logs': publish_app_logs,

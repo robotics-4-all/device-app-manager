@@ -20,7 +20,8 @@ from commlib.transports.amqp import (
     Publisher, ConnectionParameters, RPCService
 )
 
-from commlib.logger import Logger
+from commlib.node import TransportType
+from commlib.logger import RemoteLogger
 
 from .docker_builder import AppBuilderDocker
 from .docker_executor import AppExecutorDocker
@@ -128,7 +129,7 @@ class AppManager(object):
                  redis_password=None,
                  redis_app_list_name=None,
                  app_started_event=None,
-                 app_stoped_event=None,
+                 app_stopped_event=None,
                  app_logs_topic=None,
                  app_stats_topic=None,
                  publish_app_logs=None,
@@ -174,8 +175,6 @@ class AppManager(object):
         self._heartbeat_thread = None
         self.apps = {}
 
-        self.__init_logger()
-        self.debug = debug
         self._deploy_rpc = None
         self._delete_rpc = None
         self._start_rpc = None
@@ -183,6 +182,8 @@ class AppManager(object):
         self._stop_rpc = None
 
         self._init_platform_params()
+        self.__init_logger()
+        self.debug = debug
 
         redis_params = RedisConnectionParams(
             host=redis_host,
@@ -210,7 +211,7 @@ class AppManager(object):
             redis_params,
             redis_app_list_name=redis_app_list_name,
             app_started_event=app_started_event,
-            app_stoped_event=app_stoped_event,
+            app_stopped_event=app_stopped_event,
             app_logs_topic=app_logs_topic,
             app_stats_topic=app_stats_topic,
             publish_logs=publish_app_logs,
@@ -322,7 +323,10 @@ class AppManager(object):
 
     def __init_logger(self):
         """Initialize Logger."""
-        self.log = Logger('Thing-AppManager')
+        log_uri = \
+            f'thing.{self.broker_conn_params.credentials.username}.appmanager.logs'
+        self.log = RemoteLogger(self.__class__.__name__, TransportType.AMQP,
+                                self.broker_conn_params, remote_topic=log_uri)
 
     def _cleanup(self):
         self._send_disconnected_event()

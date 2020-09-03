@@ -42,12 +42,12 @@ class AppExecutorDocker(object):
     PLATFORM_APP_LOGS_TOPIC_TPL = 'thing.x.app.y.logs'
     PLATFORM_APP_STATS_TOPIC_TPL = 'thing.x.app.y.stats'
     APP_STARTED_EVENT = 'thing.x.app.y.started'
-    APP_STOPED_EVENT = 'thing.x.app.y.stoped'
+    APP_STOPED_EVENT = 'thing.x.app.y.stopped'
 
     def __init__(self, platform_params, redis_params,
                  redis_app_list_name='appmanager.apps',
                  app_started_event='thing.x.app.y.started',
-                 app_stoped_event='thing.x.app.y.stoped',
+                 app_stopped_event='thing.x.app.y.stopped',
                  app_logs_topic='thing.x.app.y.logs',
                  app_stats_topic='thing.x.app.y.stats',
                  publish_logs=True, publish_stats=False,
@@ -59,7 +59,7 @@ class AppExecutorDocker(object):
             redis_params (dict):
             redis_app_list_name (str):
             app_started_event (str):
-            app_stoped_event (str):
+            app_stopped_event (str):
             app_logs_topic (str):
             app_stats_topic (str):
             publish_logs (str):
@@ -71,7 +71,7 @@ class AppExecutorDocker(object):
         self.PLATFORM_APP_LOGS_TOPIC_TPL = app_logs_topic
         self.PLATFORM_APP_STATS_TOPIC_TPL = app_stats_topic
         self.APP_STARTED_EVENT = app_started_event
-        self.APP_STOPED_EVENT = app_stoped_event
+        self.APP_STOPED_EVENT = app_stopped_event
 
         self.sound_events = sound_events
 
@@ -211,14 +211,14 @@ class AppExecutorDocker(object):
             self._on_app_stopped(app_name)
             container.remove(force=True)
             self.redis.set_app_state(app_name, 0)
-            self._send_app_stoped_event(app_name)
+            self._send_app_stopped_event(app_name)
             self.redis.save_db()
         except docker.errors.APIError as exc:
             self.log.error(exc, exc_info=True)
         except Exception as exc:
             self.log.error(exc, exc_info=True)
 
-    def _send_app_stoped_event(self, app_name):
+    def _send_app_stopped_event(self, app_name):
         event_uri = self.APP_STOPED_EVENT.replace(
             'x', self._device_id).replace('y', app_name)
 

@@ -153,7 +153,7 @@ disconnected_event_name = thing.x.appmanager.disconnected
 
 [app_interfaces]
 app_started_event = thing.x.app.y.started
-app_stoped_event = thing.x.app.y.stoped
+app_stopped_event = thing.x.app.y.stopped
 app_logs_topic = thing.x.app.y.logs
 app_stats_topic = thing.x.app.y.stats
 publish_app_logs  = 1
