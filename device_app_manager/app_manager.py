@@ -99,6 +99,7 @@ class AppManager(object):
     PLATFORM_HOST = '155.207.33.189'
     PLATFORM_VHOST = '/'
     HEARTBEAT_INTERVAL = 10  # seconds
+    APP_UIS_DIR = "/home/pi/.config/device_app_manager/"
 
     def __init__(self,
                  platform_creds=('guest', 'guest'),
@@ -277,6 +278,16 @@ class AppManager(object):
         self.log.info('Deleting Application <{}>'.format(app_name))
         docker_app_image = self.redis.get_app_image(app_name)
         self.docker_client.images.remove(image=docker_app_image, force=True)
+
+        # Check if app has ui and remove it
+        _app = self.redis.get_app(app_name)
+        if _app['ui'] is not None:
+            try:
+                import shutil
+                target_dir = os.path.join(self.APP_UIS_DIR, app_name)
+                shutil.rmtree(target_dir)
+            except Exception as e:
+                raise ValueError("App UI removal has gone wrong:" + str(e))
         self.redis.delete_app(app_name)
         ## Save db in hdd
         self.redis.save_db()
