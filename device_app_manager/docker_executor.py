@@ -17,7 +17,7 @@ from .redis_controller import RedisController
 
 from commlib.transports.amqp import Publisher
 
-from commlib.transports.redis import ActionClient
+from commlib.transports.redis import ActionClient, RPCClient
 from commlib.transports.redis import ConnectionParameters as RedisParams
 
 
@@ -86,6 +86,10 @@ class AppExecutorDocker(object):
         self._device_id = self.platform_params.credentials.username
         self.container_config = DockerContainerConfig()
         self._rparams = RedisParams(host='localhost')
+
+        self.custom_ui_rpc_client_start = RPCClient(conn_params=self._rparams, rpc_name="device.ui.custom.start")
+        self.custom_ui_rpc_client_stop = RPCClient(conn_params=self._rparams, rpc_name="device.ui.custom.stop")
+
         if self.sound_events:
             self._speak_action_name = \
                 '/robot/robot_1/actuator/audio/speaker/usb_speaker/d0/id_0/speak'
@@ -124,6 +128,15 @@ class AppExecutorDocker(object):
         self.redis.save_db()
 
         self._send_app_started_event(app_name)
+
+        # Start custom ui if exists
+        ui = self.redis.get_app(app_name)['ui']
+        if ui is not None:
+            self.log.info("Raising UI from the dead")
+            res = self.custom_ui_rpc_client_start.call({"dir": ui + "/"})
+            self.log.info(f"Response from Custom UI: {res}")
+        else:
+            self.log.info("No UI for this app")
 
         log_thread = None
         if self.publish_logs:
@@ -333,6 +346,8 @@ class AppExecutorDocker(object):
         return app_exit_thread
 
     def _on_app_started(self, app_name):
+        return
+        # MANUAL KILL OF SPEAK HERE
         _text = 'Η εφαρμογή {} ξεκίνησε'.format(app_name)
         speak_goal_data = {
             'text': _text,
@@ -346,6 +361,12 @@ class AppExecutorDocker(object):
                 self.log.error(exc)
 
     def _on_app_stopped(self, app_name):
+
+        # Stop custom ui if exists
+        self.log.info("Banishing UI to the dead")
+        res = self.custom_ui_rpc_client_stop.call({})
+        self.log.info(f"Response from Custom UI: {res}")
+
         _text = 'Η εφαρμογή {} τερμάτισε'.format(app_name)
         speak_goal_data = {
             'text': _text,
