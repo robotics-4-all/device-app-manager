@@ -3,7 +3,7 @@ class AppModel(object):
     def __init__(self, name=None, app_type=None, state=0,
                  docker_image_name=None, docker_container_id=None,
                  docker_container_name=None, app_info=None,
-                 init_params=None, scheduler_params=None):
+                 init_params=None, scheduler_params=None, ui=None):
         self.name = name
         self.app_type = app_type
         self.state = state
@@ -15,6 +15,7 @@ class AppModel(object):
         self.info = app_info
         self.init_params = init_params
         self.scheduler_params = scheduler_params
+        self.ui = ui
 
     @property
     def docker(self):
@@ -45,7 +46,8 @@ class AppModel(object):
                 }
             },
             'info': self.info,
-            'init_params': self.init_params
+            'init_params': self.init_params,
+            'ui': self.ui
         }
         return _d
 

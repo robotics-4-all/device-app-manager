@@ -37,6 +37,7 @@ class AppBuilderDocker(object):
     APP_INIT_FILE_NAME = 'init.conf'
     APP_INFO_FILE_NAME = 'app.info'
     SCHEDULER_FILE_NAME = 'exec.conf'
+    APP_UIS_DIR = "/home/pi/.config/device_app_manager/"
 
     def __init__(self, image_prefix='app', build_dir='/tmp/app-manager/apps/'):
         self.IMAGE_NAME_PREFIX = image_prefix
@@ -59,6 +60,20 @@ class AppBuilderDocker(object):
         app_dir = self._prepare_build(
             app_name, app_type, app_tarball_path)
 
+        # Fix this better
+        # Check if folder ui in app_dir
+        target_dir = None
+        if os.path.isdir(os.path.join(app_dir, "app", "ui")):
+            self.log.info("App has ui dir!")
+            import shutil
+            source_dir = os.path.join(app_dir, "app", "ui")
+            target_dir = os.path.join(self.APP_UIS_DIR, app_name)
+            # Delete old folder
+            shutil.rmtree(target_dir)
+            shutil.copytree(source_dir, target_dir)
+        else:
+            self.log.info("App has no ui dir") 
+
         self._build_image(app_dir, image_name)
 
         if app_type in ('r4a_ros2_py', 'r4a_commlib'):
@@ -71,9 +86,9 @@ class AppBuilderDocker(object):
 
             _app = AppModel(app_name, app_type, docker_image_name=image_name,
                             init_params=init_params, app_info=app_info,
-                            scheduler_params=scheduler_params)
+                            scheduler_params=scheduler_params, ui=target_dir)
         else:
-            _app = AppModel(app_name, app_type, docker_image_name=image_name)
+            _app = AppModel(app_name, app_type, docker_image_name=image_name, ui=target_dir)
         return _app
 
     def __init_logger(self):
