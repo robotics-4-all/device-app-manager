@@ -68,8 +68,11 @@ class AppBuilderDocker(object):
             import shutil
             source_dir = os.path.join(app_dir, "app", "ui")
             target_dir = os.path.join(self.APP_UIS_DIR, app_name)
-            # Delete old folder
-            shutil.rmtree(target_dir)
+            # Delete old folder if exists
+            try:
+                shutil.rmtree(target_dir)
+            except:
+                self.log.info("No previous ui dir existed")
             shutil.copytree(source_dir, target_dir)
         else:
             self.log.info("App has no ui dir") 
