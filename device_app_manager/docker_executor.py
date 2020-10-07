@@ -290,7 +290,6 @@ class AppExecutorDocker(object):
                     'timestamp': 0,
                     'log_msg': _log_msg
                 }
-                self.log.debug('Sending logs of app <{}>'.format(app_name))
                 app_logs_pub.publish(msg)
                 if stop_event.is_set():
                     break
@@ -313,8 +312,6 @@ class AppExecutorDocker(object):
                 decode=True,
                 stream=True):
             _stats_msg = line
-            # self.log.debug(
-            #     'Sending stats of app <{}> container'.format(app_name))
             app_stats_pub.publish(_stats_msg)
             if stop_event.is_set():
                 break
