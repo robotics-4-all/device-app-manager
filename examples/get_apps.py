@@ -14,14 +14,10 @@ import argparse
 import amqp_common
 
 
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='AMQP RPC Client CLI.')
     parser.add_argument(
         '--device-id', dest='device_id', help='UID of the device',
-        type=str, default='')
-    parser.add_argument(
-        '--app-type', dest='app_type', help='Type of Application',
         type=str, default='')
     parser.add_argument(
         '--rpc-name', dest='rpc_name', help='The URI of the RPC endpoint',
@@ -40,7 +36,7 @@ if __name__ == "__main__":
         '--vhost',
         dest='vhost',
         help='Virtual host to connect to.',
-        default='/klpanagi')
+        default='/')
     parser.add_argument(
         '--username',
         dest='username',
@@ -74,6 +70,7 @@ if __name__ == "__main__":
     conn_params.credentials = amqp_common.Credentials(username, password)
 
     rpc_name = rpc_name.format(device_id)
+    print(rpc_name)
     rpc_client = amqp_common.RpcClient(rpc_name, connection_params=conn_params)
 
     rpc_client.debug = True
