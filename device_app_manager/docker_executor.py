@@ -87,14 +87,16 @@ class AppExecutorDocker(object):
         self.container_config = DockerContainerConfig()
         self._rparams = RedisParams(host='localhost')
 
-        self.custom_ui_rpc_client_start = RPCClient(conn_params=self._rparams, rpc_name="device.ui.custom.start")
-        self.custom_ui_rpc_client_stop = RPCClient(conn_params=self._rparams, rpc_name="device.ui.custom.stop")
+        self.custom_ui_rpc_client_start = RPCClient(
+            conn_params=self._rparams,rpc_name="device.ui.custom.start")
+        self.custom_ui_rpc_client_stop = RPCClient(
+            conn_params=self._rparams, rpc_name="device.ui.custom.stop")
 
         if self.sound_events:
             self._speak_action_name = \
                 '/robot/robot_1/actuator/audio/speaker/usb_speaker/d0/id_0/speak'
-            self._speak_action = ActionClient(conn_params=self._rparams,
-                                              action_name=self._speak_action_name)
+            self._speak_action = ActionClient(
+                conn_params=self._rparams, action_name=self._speak_action_name)
 
     def __init_logger(self):
         """Initialize Logger."""
@@ -167,7 +169,7 @@ class AppExecutorDocker(object):
         self.log.debug('Killing container: {}'.format(_container_id))
         c = self.docker_client.containers.get(_container_id)
         try:
-            c.stop()
+            c.stop(timeout=10)
         except docker.errors.APIError as exc:  # Not running case
             self.log.warning(exc)
 
@@ -176,10 +178,9 @@ class AppExecutorDocker(object):
         for i in range(len(self.running_apps)):
             if self.running_apps[i][0] == app_name:
                 _aidx = i
-        if _aidx == -1:
-            self._app_exit_handler(app_name, c)
-        else:
+        if _aidx != -1:
             del self.running_apps[_aidx]
+            c.wait()
         ## <---------------------------------------------
 
     def _cleanup(self):
@@ -211,7 +212,7 @@ class AppExecutorDocker(object):
             container_name, container.id))
         return container
 
-    def _wait_app_exit(self, app_name, stop_event, container):
+    def _wait_app_exit(self, app_name, container):
         container.wait()
         self._app_exit_handler(app_name, container)
 
@@ -333,7 +334,7 @@ class AppExecutorDocker(object):
     def _detach_app_exit_listener(self, app_name, container):
         t_stop_event = threading.Event()
         t = threading.Thread(target=self._wait_app_exit,
-                             args=(app_name, t_stop_event, container))
+                             args=(app_name, container))
         t.daemon = True
         t.start()
         app_exit_thread = {
@@ -361,7 +362,7 @@ class AppExecutorDocker(object):
 
         # Stop custom ui if exists
         self.log.info("Banishing UI to the dead")
-        res = self.custom_ui_rpc_client_stop.call({})
+        res = self.custom_ui_rpc_client_stop.call({}, timeout=1)
         self.log.info(f"Response from Custom UI: {res}")
 
         _text = 'Η εφαρμογή {} τερμάτισε'.format(app_name)
@@ -372,6 +373,6 @@ class AppExecutorDocker(object):
         }
         if self.sound_events:
             try:
-                self._speak_action.send_goal(speak_goal_data)
+                self._speak_action.send_goal(speak_goal_data, timeout=1)
             except Exception as exc:
                 self.log.error(exc)
