@@ -76,7 +76,6 @@ class AppExecutorDocker(object):
         self.sound_events = sound_events
 
         self.docker_client = docker.from_env()
-        self.docker_cli = docker.APIClient(base_url=self.DOCKER_DAEMON_URL)
         self.__init_logger()
         self.redis = RedisController(redis_params, redis_app_list_name)
         self.running_apps = []  # Array of tuples (app_name, container_name)
@@ -102,7 +101,8 @@ class AppExecutorDocker(object):
         """Initialize Logger."""
         self.log = create_logger(self.__class__.__name__)
 
-    def run_app(self, app_name, app_args=[]):
+    def run_app(self, app_name: str, app_args: list = [],
+                auto_remove: bool = False):
         """Run an Application.
 
         Args:
@@ -132,13 +132,7 @@ class AppExecutorDocker(object):
         self._send_app_started_event(app_name)
 
         # Start custom ui if exists
-        ui = self.redis.get_app(app_name)['ui']
-        if ui is not None:
-            self.log.info("Raising UI from the dead")
-            res = self.custom_ui_rpc_client_start.call({"dir": ui + "/"})
-            self.log.info(f"Response from Custom UI: {res}")
-        else:
-            self.log.info("No UI for this app")
+        self._start_app_ui_component(app_name)
 
         log_thread = None
         if self.publish_logs:
@@ -149,7 +143,8 @@ class AppExecutorDocker(object):
             stats_thread = self._detach_app_stats(_container_name, _container)
 
         exit_capture_thread = self._detach_app_exit_listener(_container_name,
-                                                             _container)
+                                                             _container,
+                                                             auto_remove)
 
         self.running_apps.append((app_name, _container_name, _container,
                                   log_thread, stats_thread,
@@ -157,7 +152,16 @@ class AppExecutorDocker(object):
 
         self._on_app_started(app_name)
 
-    def stop_app(self, app_name):
+    def _start_app_ui_component(self, app_name: str) -> None:
+        ui = self.redis.get_app(app_name)['ui']
+        if ui is not None:
+            self.log.info("Raising UI from the dead")
+            res = self.custom_ui_rpc_client_start.call({"dir": ui + "/"})
+            self.log.info(f"Response from Custom UI: {res}")
+        else:
+            self.log.info("No UI for this app")
+
+    def stop_app(self, app_name: str) -> None:
         """Stops application given its name
 
         Args:
@@ -212,11 +216,11 @@ class AppExecutorDocker(object):
             container_name, container.id))
         return container
 
-    def _wait_app_exit(self, app_name, container):
+    def _wait_app_exit(self, app_name, container, auto_remove=False):
         container.wait()
-        self._app_exit_handler(app_name, container)
+        self._app_exit_handler(app_name, container, auto_remove)
 
-    def _app_exit_handler(self, app_name, container):
+    def _app_exit_handler(self, app_name, container, auto_remove=False):
         try:
             if not self.redis.app_exists(app_name):
                 raise RuntimeError(
@@ -226,6 +230,10 @@ class AppExecutorDocker(object):
             container.remove(force=True)
             self.redis.set_app_state(app_name, 0)
             self._send_app_stopped_event(app_name)
+            if auto_remove:
+                self.redis.delete_app(app_name)
+                self.docker_client.images.remove(container.image.id,
+                                                 force=True)
             self.redis.save_db()
         except docker.errors.APIError as exc:
             self.log.error(exc, exc_info=True)
@@ -331,10 +339,10 @@ class AppExecutorDocker(object):
         }
         return app_stats_thread
 
-    def _detach_app_exit_listener(self, app_name, container):
+    def _detach_app_exit_listener(self, app_name, container, auto_remove=False):
         t_stop_event = threading.Event()
         t = threading.Thread(target=self._wait_app_exit,
-                             args=(app_name, container))
+                             args=(app_name, container, auto_remove))
         t.daemon = True
         t.start()
         app_exit_thread = {
@@ -346,13 +354,13 @@ class AppExecutorDocker(object):
     def _on_app_started(self, app_name):
         return
         # MANUAL KILL OF SPEAK HERE
-        _text = 'Η εφαρμογή {} ξεκίνησε'.format(app_name)
-        speak_goal_data = {
-            'text': _text,
-            'volume': 50,
-            'language': 'el'
-        }
         if self.sound_events:
+            _text = 'Η εφαρμογή {} ξεκίνησε'.format(app_name)
+            speak_goal_data = {
+                'text': _text,
+                'volume': 50,
+                'language': 'el'
+            }
             try:
                 self._speak_action.send_goal(speak_goal_data)
             except Exception as exc:

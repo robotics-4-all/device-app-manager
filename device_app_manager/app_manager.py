@@ -292,7 +292,7 @@ class AppManager(object):
         ## Save db in hdd
         self.redis.save_db()
 
-    def start_app(self, app_name, app_args=[]):
+    def start_app(self, app_name, app_args=[], auto_remove=False):
         if not self.redis.app_exists(app_name):
             raise ValueError('App <{}> does not exist locally'.format(app_name))
 
@@ -301,7 +301,7 @@ class AppManager(object):
         if app['state'] == 1:
             raise ValueError('Application is allready running.')
 
-        self.app_executor.run_app(app_name, app_args)
+        self.app_executor.run_app(app_name, app_args, auto_remove=auto_remove)
         return app_name
 
     def stop_app(self, app_name):
@@ -323,7 +323,8 @@ class AppManager(object):
 
     def fast_deploy(self, app_name, app_type, app_tarball_path, app_args=[]):
         self.install_app(app_name, app_type, app_tarball_path)
-        self.start_app(app_name, app_args=app_args)
+        self.start_app(app_name, app_args=app_args, auto_remove=True)
+        return app_name
 
     def _init_platform_params(self):
         self.broker_conn_params = ConnectionParameters(
