@@ -195,25 +195,25 @@ Returns the list of currently running applications.
 **URI**: `thing.{thing_id}.appmanager.apps.running`
 
 **DataModel**:
-  - Input:
   
-```
-{
-}
-```
-  - Output:
+```json
+Request
+--------
+{}
 
-```
+Response
+--------
 {
   "status": <200/404>,
   "apps": [<app>],
   "error": "<error_message>"
 }
+
 ```
 
 where `app` has the following schema:
 
-```
+```json
 {
   "name": "test",
   "state": 0,
@@ -234,15 +234,14 @@ Returns the list of installed applications.
 **URI**: `thing.{thing_id}.appmanager.apps`
 
 **DataModel**:
-  - Input:
   
-```
-{
-}
-```
-  - Output:
+```json
+Request
+--------
+{}
 
-```
+Response
+--------
 {
   "status": <200/404>,
   "apps": [<app>],
@@ -252,7 +251,7 @@ Returns the list of installed applications.
 
 where `app` has the following schema:
 
-```
+```json
 {
   "name": "test",
   "state": 0,
@@ -275,17 +274,18 @@ Supported Applications are:
 **URI**: `thing.{thing_id}.appmanager.install_app`
 
 **DataModel**:
-  - Input:
-```
+
+```json
+Request
+--------
 {
   "app_id": "<application_unique_id>",
   "app_type": <r4a_ros2_py>,
   "app_tarball": <BASE64_ENCODED_TARBALL>
 }
-```
-  - Output: 
 
-```
+Response
+--------
 {
   "status": <200/404>,
   "app_id": <application_unique_id>,
@@ -300,17 +300,17 @@ Starts  a pre-installed application.
 **URI**: `thing.{thing_id}.appmanager.start_app`
 
 **DataModel**:
-  - Input:
-  
-```
+
+```json
+Request
+--------
 {
   "app_id": <application_unique_id>,
   "app_args": []
 }
-```
-  - Output:
-  
-```
+
+Response
+--------
 {
   "status": <200/404>,
   "app_id": <application_unique_id>,
@@ -332,14 +332,16 @@ Stops a running application.
 **URI**: `thing.{thing_id}.appmanager.stop_app`
 
 **DataModel**:
-  - Input:
-```
+
+```json
+Request
+--------
 {
   "app_id": <application_unique_id>
 }
-```
-  - Output:
-```
+
+Response
+--------
 {
   "status": <200/404>,
   "error": "<error_message>"
@@ -357,14 +359,16 @@ Delete a pre-installed application.
 **URI**: `thing.{thing_id}.appmanager.delete_app`
 
 **DataModel**:
-  - Input:      
-```
+
+```json
+Request
+--------
 {
   "app_id": <application_unique_id>
 }
-```
-  - Output:
-```
+
+Response
+--------
 {
   "status": <200/404>,
   "error": "<error_message>"
@@ -388,8 +392,16 @@ also check the state by validating existence of the various service queues.
 **URI**: `thing.{thing_id}.appmanager.is_alive`
 
 **DataModel**:
-  - Input: `{}`
-  - Output: `{}`
+
+```json
+Request
+--------
+{}
+
+Response
+--------
+{}
+```
 
 ### Platform Monitoring Interfaces
 
@@ -424,7 +436,8 @@ Sends application logs captured from stdout and stderr to a topic.
 **URI**: `thing.{thing_id}.app.{app_id}.logs`
 
 **DataModel**:
-```
+
+```json
 {
   "timestamp": <timestamp_ms>,
   "log_msg": "<LOG_MSG>"
@@ -438,7 +451,8 @@ Sends runtime stats.
 **URI**: `thing.{thing_id}.app.{app_id}.stats`
 
 **DataModel**:
-```
+
+```json
 {
   ...
 }
