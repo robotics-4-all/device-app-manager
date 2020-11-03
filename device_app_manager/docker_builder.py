@@ -8,6 +8,8 @@ import json
 import enum
 from collections import namedtuple
 import yaml
+import shutil
+from .exceptions import ApplicationError, InternalError
 
 from jinja2 import Template, Environment, PackageLoader, select_autoescape
 
@@ -64,8 +66,7 @@ class AppBuilderDocker(object):
         # Check if folder ui in app_dir
         target_dir = None
         if os.path.isdir(os.path.join(app_dir, "app", "ui")):
-            self.log.info("App has ui dir!")
-            import shutil
+            self.log.info(f'App <{app_name}> has ui dir!')
             source_dir = os.path.join(app_dir, "app", "ui")
             target_dir = os.path.join(self.APP_UIS_DIR, app_name)
             # Delete old folder if exists
@@ -75,27 +76,49 @@ class AppBuilderDocker(object):
                 self.log.info("No previous ui dir existed")
             shutil.copytree(source_dir, target_dir)
         else:
-            self.log.info("App has no ui dir") 
-
-        self._build_image(app_dir, image_name)
+            self.log.info(f'App <{app_name}> has no ui dir')
 
         if app_type in ('r4a_ros2_py', 'r4a_commlib'):
-            init_params = self._read_init_params(
-                os.path.join(app_dir, 'app', self.APP_INIT_FILE_NAME))
-            app_info = self._read_app_info(
-                os.path.join(app_dir, 'app', self.APP_INFO_FILE_NAME))
-            scheduler_params = self._read_scheduler_params(
-                os.path.join(app_dir, 'app', self.SCHEDULER_FILE_NAME))
+            ## Files that must exist
+            # if not os.path.isfile(os.path.join(app_dir, 'app',
+            #                                    self.APP_INIT_FILE_NAME)):
+            #     raise ApplicationError('Missing init.conf file')
+            if not os.path.isfile(os.path.join(app_dir, 'app',
+                                               self.APP_INFO_FILE_NAME)):
+                raise ApplicationError('Missing app.info file')
+            try:
+                init_params = self._read_init_params(
+                    os.path.join(app_dir, 'app', self.APP_INIT_FILE_NAME))
+            except Exception:
+                self.log.warn('Missing init.conf file!')
+                init_params = {}
+            try:
+                app_info = self._read_app_info(
+                    os.path.join(app_dir, 'app', self.APP_INFO_FILE_NAME))
+            except Exception as exc:
+                self.log.error('Could not properly read app.info file!')
+                raise ApplicationError('File app.info seems malformed!')
+            try:
+                scheduler_params = self._read_scheduler_params(
+                    os.path.join(app_dir, 'app', self.SCHEDULER_FILE_NAME))
+            except Exception:
+                self.log.warn('Missing exec.conf file!')
+                scheduler_params = {}
 
             _app = AppModel(app_name, app_type, docker_image_name=image_name,
                             init_params=init_params, app_info=app_info,
                             scheduler_params=scheduler_params, ui=target_dir)
         else:
             _app = AppModel(app_name, app_type, docker_image_name=image_name, ui=target_dir)
+        self._build_image(app_dir, image_name)
+        try:
+            shutil.rmtree(app_dir)
+        except:
+            pass
         return _app
 
     def __init_logger(self):
-        """Initialize Logger."""
+        """Initialize logger."""
         self.log = create_logger(self.__class__.__name__)
 
     def _build_image(self, app_dir, image_name):
