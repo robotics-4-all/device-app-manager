@@ -10,6 +10,7 @@ from __future__ import (
 
 import sys
 import argparse
+import pprint
 
 import amqp_common
 
@@ -70,9 +71,8 @@ if __name__ == "__main__":
     conn_params.credentials = amqp_common.Credentials(username, password)
 
     rpc_name = rpc_name.format(device_id)
-    print(rpc_name)
     rpc_client = amqp_common.RpcClient(rpc_name, connection_params=conn_params)
 
     rpc_client.debug = True
     resp = rpc_client.call({}, timeout=30)
-    print('[*] - Response:\n{}'.format(resp))
+    pprint.pprint(resp)
