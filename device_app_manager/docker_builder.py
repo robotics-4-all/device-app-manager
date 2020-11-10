@@ -24,8 +24,8 @@ from commlib.transports.amqp import (
 
 DOCKERFILE_TPL_MAP = {
     'py3': 'Dockerfile.py3.tpl',
-    'r4a_ros2_py': 'Dockerfile.r4a_ros2_py.tpl',
-    'r4a_commlib': 'Dockerfile.r4a_commlib.tpl'
+    'r4a_commlib': 'Dockerfile.r4a_commlib.tpl',
+    'nodered': 'Dockerfile.nodered.tpl'
     # 'ros2_package': 'Dockerfile.ros2_package.tpl'  ## Not yet supported
 }
 
@@ -78,11 +78,7 @@ class AppBuilderDocker(object):
         else:
             self.log.info(f'App <{app_name}> has no ui dir')
 
-        if app_type in ('r4a_ros2_py', 'r4a_commlib'):
-            ## Files that must exist
-            # if not os.path.isfile(os.path.join(app_dir, 'app',
-            #                                    self.APP_INIT_FILE_NAME)):
-            #     raise ApplicationError('Missing init.conf file')
+        if app_type == 'r4a_commlib':
             if not os.path.isfile(os.path.join(app_dir, 'app',
                                                self.APP_INFO_FILE_NAME)):
                 raise ApplicationError('Missing app.info file')
@@ -108,9 +104,15 @@ class AppBuilderDocker(object):
             _app = AppModel(app_name, app_type, docker_image_name=image_name,
                             init_params=init_params, app_info=app_info,
                             scheduler_params=scheduler_params, ui=target_dir)
+        elif app_type == 'py3':
+            _app = AppModel(app_name, app_type, docker_image_name=image_name)
+        elif app_type == 'nodered':
+            _app = AppModel(app_name, app_type, docker_image_name=image_name)
         else:
-            _app = AppModel(app_name, app_type, docker_image_name=image_name, ui=target_dir)
+            raise ValueError('Not supported app_type')
+
         self._build_image(app_dir, image_name)
+
         try:
             shutil.rmtree(app_dir)
         except:
