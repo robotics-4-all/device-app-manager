@@ -567,7 +567,8 @@ class AppManager(object):
     def _fast_deploy_rpc_callback(self, msg, meta):
         resp = {
             'status': 200,
-            'error': ''
+            'error': '',
+            'app_id': ''
         }
         try:
             self.log.debug('Call <fast-deploy> RPC')
@@ -599,7 +600,9 @@ class AppManager(object):
             tarball_b64 =  app_tar['data']
             tarball_path = self._store_app_tar(
                 tarball_b64, self.APP_STORAGE_DIR)
-            self.fast_deploy(app_name, app_type, tarball_path, app_args)
+            app_id = self.fast_deploy(app_name, app_type,
+                                      tarball_path, app_args)
+            resp['app_id'] = app_id
 
         except Exception as e:
             self.log.error(e, exc_info=True)
