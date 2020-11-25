@@ -1,0 +1,12 @@
+{
+  "type": "service_account",
+  "project_id": "elsa-277912",
+  "private_key_id": "3dfe30a8f65bf780797726925acb535b6306bbe7",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDKr5i/AtUTvNsn\n3xSX6wLcc9ZvwgDvn/bcL0n5OvlVbDiLwlJaHfDyLmhr17u2hQ7/ZN+B+PH/wHG0\nzv5N5RxzFJb+USU4IppKnQ+R8f+fLjk9/Yd3Ewi3AXsl0A6nkFGwJGDUqDKUrWLS\nPD3qw0nk1qsmWUAHUxop5lOXgy7SuczVd3oGa2Za59oBMct1m/CK0q45TwEPUC0m\nL3PTAUcZAkzrkvlE8U9/5DfV+KwDjtnLG88LShlp54AOsAyX9GYiYlqaQr6KuZGj\nO0oyGZluZ8FDAjOc2hd03JOLkSefpOXIUd5JFXoPZnpgjS10OVVhhv/AX++tMS6G\ndymW7iDVAgMBAAECggEALcQEi2zKTBCis5gNgFgSZ1DIpKd7qp/GD+WloF8OmZk8\nE2KnUa3dD/ImpeMqgYX94vEV/rUFf6gmhJsQlOocyGdnyLjt3IUDrcFVGLE59Olt\nB3BNvDdSCnCNK/aUuIU/zLQKITpxYVzdKXdsy6uY7dEDCD+y03SSPc/CJD38vpvK\nQlDzBpsgIHx4cX6iTAg2d7z2g5Fpf4Giv8EmRtWtQx/gIeSADH3NJCO/SaBZI8Rg\nOf1LfnY7W8wdnQO1ssy1xNVjHiY9VMEPLc/e82sLRyC55ngWKfiKkGl0losDTFKE\nXtA9XXxlWJxolFtQz/vNeJce/0OZnNK/m4qVNotV6QKBgQD4R8kTTzTPVXUMZ+2I\nbg2+N01khI+FE2dsUl2fugu2ZqNcGcefXILwPMBLPWcEtzgNQrowl+REmyNuQxOu\n1CAztnNnfPNtR5bTgKZLKHN4UqknvtYUlEuCv9XQNanN2WPgGTZxjy3+kx9xf4EK\nD1QAOGe6dwIp9bpP1sn1CbMJGwKBgQDQ/OWiD6V3yOyKuAqWpPkrO/fpMxI6MeYn\nY+SL0eSk/h+jC1tJAZ87jo0mhqcgW+rHt5U//7y2kUHq0SiM2IMe/Baro/Jbsaxy\n75CFDY8KIakzFO+YnUCelgZvMK6KmwIS+1GapOgXO+R5sa7NxebLlk6k6YzzWISH\ndNrCbH2MzwKBgGfqc8h3MF1PIUxt+0dM+MeSkfvuV7uVIYZ++tytm9VeJCWaTKjw\nqYUviDR1oLaikP1L3m4UROBKJowx2v0jn87FIIxCCgjFG+WuROvUJHBJ+K6/+w5l\n+yzgafdZXpbf1COpqdXh3Zhdr51rhnDVdY0aDqBGy0sQpEhiV+kNhDfdAoGBAJel\nWu+s0NHJnzLNdwl27kMcAbla0LgfqzUb/CQlCvdaWxSRUgz4u1WZC/1PqggGCqgf\nI5LL/GCxqJY+bWE+Xm7mV4D2tw8oLs073q9ddlTQthkV8QHZ4aDxlfuq5Iw5DFk/\nuigvzyXE1PYlI4W3O9Cw4aIywo91xL0R4wc/eB7rAoGABi1tGXquNwc3SZtsNVvN\nLJ4YrM+b5YxuTSGEb3Vba5wGIk6QqLSRQwYH0Bf0fK9/8akAR9/oNYcIHdk3RePg\n3LxFvhV5DyFeuG4TMMQ86PN27j+VCiYynbELQSTFjzNHXNi9fRA9ybwIPoVS08BX\nsEO04TXg9lVNAfVYuXQ9tfc=\n-----END PRIVATE KEY-----\n",
+  "client_email": "elsa-speech@elsa-277912.iam.gserviceaccount.com",
+  "client_id": "108148268957626373500",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/elsa-speech%40elsa-277912.iam.gserviceaccount.com"
+}
