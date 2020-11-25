@@ -1,10 +1,3 @@
-from __future__ import (
-    absolute_import,
-    division,
-    print_function,
-    unicode_literals
-)
-
 import os
 import uuid
 import docker
@@ -15,6 +8,8 @@ import json
 import enum
 from collections import namedtuple
 import yaml
+import shutil
+from .exceptions import ApplicationError, InternalError
 
 from jinja2 import Template, Environment, PackageLoader, select_autoescape
 
@@ -22,18 +17,15 @@ from ._logging import create_logger
 from .redis_controller import RedisController
 from .app_model import AppModel
 
-from amqp_common import (
-    ConnectionParameters,
-    Credentials,
-    PublisherSync,
-    RpcServer
+from commlib.transports.amqp import (
+    Publisher, RPCService
 )
 
 
 DOCKERFILE_TPL_MAP = {
     'py3': 'Dockerfile.py3.tpl',
-    'r4a_ros2_py': 'Dockerfile.r4a_ros2_py.tpl',
-    'r4a_commlib': 'Dockerfile.r4a_commlib.tpl'
+    'r4a_commlib': 'Dockerfile.r4a_commlib.tpl',
+    'nodered': 'Dockerfile.nodered.tpl'
     # 'ros2_package': 'Dockerfile.ros2_package.tpl'  ## Not yet supported
 }
 
@@ -47,10 +39,9 @@ class AppBuilderDocker(object):
     APP_INIT_FILE_NAME = 'init.conf'
     APP_INFO_FILE_NAME = 'app.info'
     SCHEDULER_FILE_NAME = 'exec.conf'
+    APP_UIS_DIR = "/home/pi/.config/device_app_manager/"
 
-    def __init__(self, image_prefix='app',
-                 build_dir='/tmp/app-manager/apps/',
-                 ):
+    def __init__(self, image_prefix='app', build_dir='/tmp/app-manager/apps/'):
         self.IMAGE_NAME_PREFIX = image_prefix
         self.BUILD_DIR = build_dir
 
@@ -71,25 +62,65 @@ class AppBuilderDocker(object):
         app_dir = self._prepare_build(
             app_name, app_type, app_tarball_path)
 
-        self._build_image(app_dir, image_name)
+        # Fix this better
+        # Check if folder ui in app_dir
+        target_dir = None
+        if os.path.isdir(os.path.join(app_dir, "app", "ui")):
+            self.log.info(f'App <{app_name}> has ui dir!')
+            source_dir = os.path.join(app_dir, "app", "ui")
+            target_dir = os.path.join(self.APP_UIS_DIR, app_name)
+            # Delete old folder if exists
+            try:
+                shutil.rmtree(target_dir)
+            except:
+                self.log.info("No previous ui dir existed")
+            shutil.copytree(source_dir, target_dir)
+        else:
+            self.log.info(f'App <{app_name}> has no ui dir')
 
-        if app_type in ('r4a_ros2_py', 'r4a_commlib'):
-            init_params = self._read_init_params(
-                os.path.join(app_dir, 'app', self.APP_INIT_FILE_NAME))
-            app_info = self._read_app_info(
-                os.path.join(app_dir, 'app', self.APP_INFO_FILE_NAME))
-            scheduler_params = self._read_scheduler_params(
-                os.path.join(app_dir, 'app', self.SCHEDULER_FILE_NAME))
+        if app_type == 'r4a_commlib':
+            if not os.path.isfile(os.path.join(app_dir, 'app',
+                                               self.APP_INFO_FILE_NAME)):
+                raise ApplicationError('Missing app.info file')
+            try:
+                init_params = self._read_init_params(
+                    os.path.join(app_dir, 'app', self.APP_INIT_FILE_NAME))
+            except Exception:
+                self.log.warn('Missing init.conf file!')
+                init_params = {}
+            try:
+                app_info = self._read_app_info(
+                    os.path.join(app_dir, 'app', self.APP_INFO_FILE_NAME))
+            except Exception as exc:
+                self.log.error('Could not properly read app.info file!')
+                raise ApplicationError('File app.info seems malformed!')
+            try:
+                scheduler_params = self._read_scheduler_params(
+                    os.path.join(app_dir, 'app', self.SCHEDULER_FILE_NAME))
+            except Exception:
+                self.log.warn('Missing exec.conf file!')
+                scheduler_params = {}
 
             _app = AppModel(app_name, app_type, docker_image_name=image_name,
                             init_params=init_params, app_info=app_info,
-                            scheduler_params=scheduler_params)
-        else:
+                            scheduler_params=scheduler_params, ui=target_dir)
+        elif app_type == 'py3':
             _app = AppModel(app_name, app_type, docker_image_name=image_name)
+        elif app_type == 'nodered':
+            _app = AppModel(app_name, app_type, docker_image_name=image_name)
+        else:
+            raise ValueError('Not supported app_type')
+
+        self._build_image(app_dir, image_name)
+
+        try:
+            shutil.rmtree(app_dir)
+        except:
+            pass
         return _app
 
     def __init_logger(self):
-        """Initialize Logger."""
+        """Initialize logger."""
         self.log = create_logger(self.__class__.__name__)
 
     def _build_image(self, app_dir, image_name):

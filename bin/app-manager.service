@@ -1,13 +1,17 @@
 [Unit]
 Description=Service for device app manager.
-# Depends on redis
-After=redis-server.service redis.service
+# After=multi-user.target
+After=multi-user.target network.target redis-server.service
 
 [Service]
 User=pi
-# Make sure to change this directory accordingly!!!
-ExecStart=%s/device-app-manager/bin/app_manager.py
+Type=idle
+ExecStart=/usr/bin/python3 -u app_manager.py
+WorkingDirectory=/home/pi/device-app-manager/bin/
+StandardOutput=inherit
+StandardError=inherit
 Restart=always
+RestartSec=5s
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target

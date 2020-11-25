@@ -203,6 +203,7 @@ class RedisController(object):
         _app['type'] = app['type']
         _app['docker'] = app['docker']
         _app['updated_at'] = int(time.time())
+        _app['ui'] = app['ui']
 
         self.redis.lset(
             self.APP_LIST_NAME, app_index, json.dumps(_app))

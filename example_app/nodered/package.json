@@ -1,0 +1,8 @@
+{
+    "name": "nodered-app",
+    "description": "A Node-RED App",
+    "version": "0.0.1",
+    "dependencies": {
+        "node-red-contrib-redis": ""
+  }
+}

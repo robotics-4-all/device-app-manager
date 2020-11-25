@@ -1,10 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from __future__ import print_function
-
 import sys
 import argparse
+from pprint import pprint
 
 import amqp_common
 
@@ -43,7 +42,7 @@ if __name__ == "__main__":
         '--vhost',
         dest='vhost',
         help='Virtual host to connect to.',
-        default='/klpanagi')
+        default='/')
     parser.add_argument(
         '--username',
         dest='username',
@@ -86,4 +85,4 @@ if __name__ == "__main__":
 
     rpc_client.debug = True
     resp = rpc_client.call(msg.to_dict(), timeout=30)
-    print('[*] - Response:\n{}'.format(resp))
+    pprint(resp)
