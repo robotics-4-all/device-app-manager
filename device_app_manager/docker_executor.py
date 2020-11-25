@@ -87,7 +87,7 @@ class AppExecutorDocker(object):
         self._rparams = RedisParams(host='localhost')
 
         self.custom_ui_rpc_client_start = RPCClient(
-            conn_params=self._rparams,rpc_name="device.ui.custom.start")
+            conn_params=self._rparams, rpc_name="device.ui.custom.start")
         self.custom_ui_rpc_client_stop = RPCClient(
             conn_params=self._rparams, rpc_name="device.ui.custom.stop")
 
@@ -155,7 +155,7 @@ class AppExecutorDocker(object):
     def _start_app_ui_component(self, app_name: str) -> None:
         ui = self.redis.get_app(app_name)['ui']
         if ui is not None:
-            self.log.info("Raising UI from the dead")
+            self.log.info("Raising UI from the dead!")
             res = self.custom_ui_rpc_client_start.call({"dir": ui + "/"})
             self.log.info(f"Response from Custom UI: {res}")
         else:

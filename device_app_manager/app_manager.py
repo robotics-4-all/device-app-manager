@@ -92,12 +92,14 @@ class AppManager(object):
     APP_FAST_DEPLOY_RPC_NAME = 'thing.x.appmanager.fast_deploy'
     ISALIVE_RPC_NAME = 'thing.x.appmanager.is_alive'
     GET_RUNNING_APPS_RPC_NAME = 'thing.x.appmanager.apps.running'
+    RHASSPY_ADD_SENTENCES_RPC = 'rhasspy_ctrl.add_sentences'
     HEARTBEAT_TOPIC = 'thing.x.appmanager.heartbeat'
     THING_CONNECTED_EVENT = 'thing.x.appmanager.connected'
     THING_DISCONNECTED_EVENT = 'thing.x.appmanager.disconnected'
     PLATFORM_PORT = '5672'
     PLATFORM_HOST = '155.207.33.189'
     PLATFORM_VHOST = '/'
+    LOCAL_BROKER_TYPE = 'REDIS'
     HEARTBEAT_INTERVAL = 10  # seconds
     APP_UIS_DIR = "/home/pi/.config/device_app_manager/"
 
@@ -252,7 +254,16 @@ class AppManager(object):
                 except docker.errors.APIError as exc:
                     self.log.error(exc, exc_info=True)
 
-    def install_app(self, app_name, app_type, app_tarball_path):
+    def install_app(self, app_name: str, app_type: str, app_tarball_path: str):
+        """install_app.
+        Install an application locally on the device. Builds the docker image
+            and stores information on the local repository.
+
+        Args:
+            app_name (str): The name/id of application
+            app_type (str): The type of the application (r4a_commlib/py3/..)
+            app_tarball_path (str): The path to the application tarball
+        """
         _app = self.app_builder.build_app(app_name, app_type, app_tarball_path)
 
         if self.redis.app_exists(app_name):
@@ -264,10 +275,23 @@ class AppManager(object):
             self.log.info('Storing new App in DB: <{}>'.format(app_name))
             self.redis.add_app(_app.serialize())
 
+        # Set rhassphy sentences for activating the application.
+        ## Look here: https://github.com/robotics-4-all/sythes-voice-events-system
+        if _app.voice_commands is not None:
+            resp = self._set_rhasspy_sentences(app_name, _app.voice_commands)
+            self.log.info(resp)
+
         self.redis.save_db()
         return app_name
 
-    def delete_app(self, app_name, force_stop=False):
+    def delete_app(self, app_name: str, force_stop: bool = False):
+        """delete_app.
+        Delete an application from the local repository
+
+        Args:
+            app_name (str): The name/id of application
+            force_stop (bool): Force stop application container
+        """
         if not self.redis.app_exists(app_name):
             raise ValueError('App <{}> does not exist locally'.format(app_name))
 
@@ -293,6 +317,14 @@ class AppManager(object):
         self.redis.save_db()
 
     def start_app(self, app_name, app_args=[], auto_remove=False):
+        """start_app.
+
+        Args:
+            app_name: The name/id of application
+            app_args: Arguments to pass to the application executable
+            auto_remove: Autoremove application from local repo upon termination
+                of the current execution. Used for testing applications.
+        """
         if not self.redis.app_exists(app_name):
             raise ValueError('App <{}> does not exist locally'.format(app_name))
 
@@ -445,6 +477,28 @@ class AppManager(object):
             debug=self.debug)
         self._fast_deploy_rpc.run()
 
+    def _init_rhassy_sentences_client(self):
+        rpc_name = self.RHASSPY_ADD_SENTENCES_RPC.replace(
+            'x',self.platform_creds[0])
+        if self.LOCAL_BROKER_TYPE == 'REDIS':
+            from commlib.transports.redis import (
+                ConnectionParameters, RPCClient
+            )
+        elif self.LOCAL_BROKER_TYPE == 'AMQP':
+            from commlib.transports.amqp import (
+                ConnectionParameters, RPCClient
+            )
+        elif self.LOCAL_BROKER_TYPE == 'MQTT':
+            from commlib.transports.mqtt import (
+                ConnectionParameters, RPCClient
+            )
+
+        broker_params = ConnectionParameters()
+        self._rhasspy_add_sentences = RPCClient(
+            rpc_name=rpc_name,
+            conn_params=broker_params,
+            debug=self.debug)
+
     def _isalive_rpc_callback(self, msg, meta):
         self.log.debug('Call <is_alive> RPC')
         return {
@@ -554,7 +608,7 @@ class AppManager(object):
                 raise TypeError('Parameter app_name should be of type string')
 
             if not self.redis.app_exists(app_name):
-                raise ValueError('App <{}> does not exist locally'.format(app_name))
+                raise ValueError(f'App <{app_name}> does not exist locally')
 
             self.stop_app(app_name)
         except Exception as e:
@@ -673,6 +727,15 @@ class AppManager(object):
         with open(tarball_path, 'wb') as f:
             f.write(tarball_decoded)
             return tarball_path
+
+    def _set_rhasspy_sentences(self, intent, sentences):
+        msg = {
+            'intent': intent,
+            'sentences': sentences
+        }
+        self.log.info('Calling Rhasspy Add-Sentences RPC...')
+        resp = self._rhasspy_add_sentences.call(msg)
+        return resp
 
     def run(self):
         try:
