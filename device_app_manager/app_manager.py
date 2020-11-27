@@ -69,7 +69,6 @@ class AppManager(object):
     Implementation of the Device Application Manager as described here (TODO)
 
     Args:
-        platform_creds (tuple): Broker (Username, Password) Tuple.
         heartbeat_interval (int): Interval time to send heartbeat messages.
             Not the same as AMQP heartbeats. Device Manager sends
             heartbeat messages at a specific topic.
@@ -96,17 +95,15 @@ class AppManager(object):
     HEARTBEAT_TOPIC = 'thing.x.appmanager.heartbeat'
     THING_CONNECTED_EVENT = 'thing.x.appmanager.connected'
     THING_DISCONNECTED_EVENT = 'thing.x.appmanager.disconnected'
-    PLATFORM_PORT = '5672'
-    PLATFORM_HOST = '155.207.33.189'
-    PLATFORM_VHOST = '/'
-    LOCAL_BROKER_TYPE = 'REDIS'
     HEARTBEAT_INTERVAL = 10  # seconds
     APP_UIS_DIR = "/home/pi/.config/device_app_manager/"
 
     def __init__(self,
-                 platform_creds=('guest', 'guest'),
                  heartbeat_interval=10,
                  debug=True,
+                 platform_broker_params=None,
+                 local_broker_params=None,
+                 redis_params=None,
                  app_build_dir=None,
                  stop_apps_on_exit=None,
                  keep_app_tarballls=None,
@@ -123,14 +120,6 @@ class AppManager(object):
                  heartbeat_topic=None,
                  connected_event=None,
                  disconnected_event=None,
-                 platform_host=None,
-                 platform_port=None,
-                 platform_vhost=None,
-                 redis_host=None,
-                 redis_port=None,
-                 redis_db=None,
-                 redis_password=None,
-                 redis_app_list_name=None,
                  app_started_event=None,
                  app_stopped_event=None,
                  app_logs_topic=None,
@@ -139,7 +128,6 @@ class AppManager(object):
                  publish_app_stats=None):
         atexit.register(self._cleanup)
 
-        self.platform_creds = platform_creds
         self.HEARTBEAT_INTERVAL = heartbeat_interval
         if app_list_rpc_name is not None:
             self.APP_LIST_RPC_NAME = app_list_rpc_name
@@ -165,14 +153,11 @@ class AppManager(object):
             self.THING_CONNECTED_EVENT = connected_event
         if disconnected_event is not None:
             self.THING_DISCONNECTED_EVENT = disconnected_event
-        if platform_host is not None:
-            self.PLATFORM_HOST = platform_host
-        if platform_port is not None:
-            self.PLATFORM_PORT = platform_port
-        if platform_vhost is not None:
-            self.PLATFORM_VHOST = platform_vhost
-
         self.APP_STORAGE_DIR = os.path.expanduser(self.APP_STORAGE_DIR)
+
+        self._platform_broker_params = platform_broker_params
+        self._local_broker_params = local_broker_params
+        self._redis_params = redis_params
 
         self._heartbeat_data = {}
         self._heartbeat_thread = None
@@ -189,18 +174,18 @@ class AppManager(object):
         self.debug = debug
 
         redis_params = RedisConnectionParams(
-            host=redis_host,
-            port=redis_port,
-            db=redis_db,
-            password=redis_password,
-            redis_app_list_name=redis_app_list_name
+            host=redis_params['host'],
+            port=redis_params['port'],
+            db=redis_params['db'],
+            password=redis_params['password'],
+            redis_app_list_name=redis_params['app_list_name']
         )
 
         self.docker_client = docker.from_env()
 
         self._create_app_storage_dir()
 
-        self.redis = RedisController(redis_params, redis_app_list_name)
+        self.redis = RedisController(redis_params, self._redis_params['app_list_name'])
         if not self.redis.ping():
             raise Exception('Could not connect to redis server.')
 
@@ -212,7 +197,7 @@ class AppManager(object):
         self.app_executor = AppExecutorDocker(
             self.broker_conn_params,
             redis_params,
-            redis_app_list_name=redis_app_list_name,
+            redis_app_list_name=self._redis_params['app_list_name'],
             app_started_event=app_started_event,
             app_stopped_event=app_stopped_event,
             app_logs_topic=app_logs_topic,
@@ -221,6 +206,7 @@ class AppManager(object):
             publish_stats=publish_app_stats
         )
         self._clean_startup()
+        self._init_rhassy_sentences_client()
 
     def _clean_startup(self):
         self.log.info('Prune stopped containers...')
@@ -360,10 +346,13 @@ class AppManager(object):
 
     def _init_platform_params(self):
         self.broker_conn_params = ConnectionParameters(
-                host=self.PLATFORM_HOST, port=self.PLATFORM_PORT,
-                vhost=self.PLATFORM_VHOST)
-        self.broker_conn_params.credentials.username = self.platform_creds[0]
-        self.broker_conn_params.credentials.password = self.platform_creds[1]
+            host=self._platform_broker_params['host'],
+            port=self._platform_broker_params['port'],
+            vhost=self._platform_broker_params['vhost'])
+        self.broker_conn_params.credentials.username = \
+            self._platform_broker_params['username']
+        self.broker_conn_params.credentials.password = \
+            self._platform_broker_params['password']
 
     def __init_logger(self):
         """Initialize Logger."""
@@ -384,7 +373,8 @@ class AppManager(object):
 
     def _init_heartbeat_pub(self):
         self._heartbeat_thread = HeartbeatThread(
-            self.HEARTBEAT_TOPIC.replace('x', self.platform_creds[0]),
+            self.HEARTBEAT_TOPIC.replace(
+                'x', self._platform_broker_params['username']),
             self.broker_conn_params,
             interval=self.HEARTBEAT_INTERVAL
         )
@@ -404,7 +394,8 @@ class AppManager(object):
         self._init_app_fast_deploy_rpc()
 
     def _init_isalive_rpc(self):
-        rpc_name = self.ISALIVE_RPC_NAME.replace('x', self.platform_creds[0])
+        rpc_name = self.ISALIVE_RPC_NAME.replace(
+            'x', self._platform_broker_params['username'])
         self._isalive_rpc = RPCService(
             rpc_name=rpc_name,
             on_request=self._isalive_rpc_callback,
@@ -413,7 +404,8 @@ class AppManager(object):
         self._isalive_rpc.run()
 
     def _init_app_list_rpc(self):
-        rpc_name = self.APP_LIST_RPC_NAME.replace('x', self.platform_creds[0])
+        rpc_name = self.APP_LIST_RPC_NAME.replace(
+            'x', self._platform_broker_params['username'])
         self._app_list_rpc = RPCService(
             rpc_name=rpc_name,
             on_request=self._get_apps_rpc_callback,
@@ -422,7 +414,8 @@ class AppManager(object):
         self._app_list_rpc.run()
 
     def _init_get_running_apps_rpc(self):
-        rpc_name = self.GET_RUNNING_APPS_RPC_NAME.replace('x', self.platform_creds[0])
+        rpc_name = self.GET_RUNNING_APPS_RPC_NAME.replace(
+            'x', self._platform_broker_params['username'])
         self._running_apps_rpc = RPCService(
             rpc_name=rpc_name,
             on_request=self._get_running_apps_rpc_callback,
@@ -432,7 +425,7 @@ class AppManager(object):
 
     def _init_app_install_rpc(self):
         rpc_name = self.APP_INSTALL_RPC_NAME.replace(
-                'x', self.platform_creds[0])
+                'x', self._platform_broker_params['username'])
         self._install_rpc = RPCService(
             rpc_name=rpc_name,
             on_request=self._install_app_rpc_callback,
@@ -442,7 +435,7 @@ class AppManager(object):
 
     def _init_app_start_rpc(self):
         rpc_name = self.APP_START_RPC_NAME.replace(
-                'x', self.platform_creds[0])
+                'x', self._platform_broker_params['username'])
         self._start_rpc = RPCService(
             rpc_name=rpc_name,
             on_request=self._start_app_rpc_callback,
@@ -451,7 +444,8 @@ class AppManager(object):
         self._start_rpc.run()
 
     def _init_app_stop_rpc(self):
-        rpc_name = self.APP_STOP_RPC_NAME.replace('x', self.platform_creds[0])
+        rpc_name = self.APP_STOP_RPC_NAME.replace(
+            'x', self._platform_broker_params['username'])
         self._stop_rpc = RPCService(
             rpc_name=rpc_name,
             on_request=self._stop_app_rpc_callback,
@@ -460,7 +454,8 @@ class AppManager(object):
         self._stop_rpc.run()
 
     def _init_app_delete_rpc(self):
-        rpc_name = self.APP_DELETE_RPC_NAME.replace('x', self.platform_creds[0])
+        rpc_name = self.APP_DELETE_RPC_NAME.replace(
+            'x', self._platform_broker_params['username'])
         self._delete_rpc = RPCService(
             rpc_name=rpc_name,
             on_request=self._delete_app_rpc_callback,
@@ -469,7 +464,8 @@ class AppManager(object):
         self._delete_rpc.run()
 
     def _init_app_fast_deploy_rpc(self):
-        rpc_name = self.APP_FAST_DEPLOY_RPC_NAME.replace('x', self.platform_creds[0])
+        rpc_name = self.APP_FAST_DEPLOY_RPC_NAME.replace(
+            'x', self._platform_broker_params['username'])
         self._fast_deploy_rpc = RPCService(
             rpc_name=rpc_name,
             on_request=self._fast_deploy_rpc_callback,
@@ -479,21 +475,23 @@ class AppManager(object):
 
     def _init_rhassy_sentences_client(self):
         rpc_name = self.RHASSPY_ADD_SENTENCES_RPC.replace(
-            'x',self.platform_creds[0])
-        if self.LOCAL_BROKER_TYPE == 'REDIS':
+            'x', self._platform_broker_params['username'])
+        if self._local_broker_params['type'] == 'REDIS':
             from commlib.transports.redis import (
                 ConnectionParameters, RPCClient
             )
-        elif self.LOCAL_BROKER_TYPE == 'AMQP':
+        elif self._local_broker_params['type'] == 'AMQP':
             from commlib.transports.amqp import (
                 ConnectionParameters, RPCClient
             )
-        elif self.LOCAL_BROKER_TYPE == 'MQTT':
+        elif self._local_broker_params['type'] == 'MQTT':
             from commlib.transports.mqtt import (
                 ConnectionParameters, RPCClient
             )
 
-        broker_params = ConnectionParameters()
+        broker_params = ConnectionParameters(
+            host=self._local_broker_params['host'],
+            port=self._local_broker_params['port'])
         self._rhasspy_add_sentences = RPCClient(
             rpc_name=rpc_name,
             conn_params=broker_params,
@@ -700,7 +698,7 @@ class AppManager(object):
     def _send_connected_event(self):
         p = Publisher(
             topic=self.THING_CONNECTED_EVENT.replace(
-                'x', self.platform_creds[0]),
+                'x', self._platform_broker_params['username']),
             conn_params=self.broker_conn_params,
             debug=False
         )
@@ -710,7 +708,7 @@ class AppManager(object):
     def _send_disconnected_event(self):
         p = Publisher(
             topic=self.THING_DISCONNECTED_EVENT.replace(
-                'x', self.platform_creds[0]),
+                'x', self._platform_broker_params['username']),
             conn_params=self.broker_conn_params,
             debug=False
         )

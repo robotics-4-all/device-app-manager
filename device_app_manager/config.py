@@ -12,7 +12,7 @@ import configparser
 def load_cfg(cfg_file):
     cfg_file = os.path.expanduser(cfg_file)
     if not os.path.isfile(cfg_file):
-        self.log.warn('Config file does not exist')
+        print(f'Config file <{cfg_file}> does not exist')
         return False
     config = configparser.ConfigParser()
     config.read(cfg_file)
@@ -44,28 +44,67 @@ def load_cfg(cfg_file):
     except configparser.NoOptionError:
         app_image_prefix = 'app-'
     ## -------------------------------------------------------------
-    ## ----------------------- Broker Parameters -------------------
+    ## ----------------------- Platform Broker Parameters -------------------
     ## -------------------------------------------------------------
     try:
-        username = config.get('broker', 'username')
+        platform_broker_type = config.get('platform_broker', 'type')
     except configparser.NoOptionError:
-        username = 'bot'
+        platform_broker_type = 'AMQP'
     try:
-        password = config.get('broker', 'password')
+        platform_broker_host = config.get('platform_broker', 'host')
     except configparser.NoOptionError:
-        password = 'b0t'
+        platform_broker_host = '127.0.0.1'
     try:
-        host = config.get('broker', 'host')
+        platform_broker_port = config.get('platform_broker', 'port')
     except configparser.NoOptionError:
-        host = '127.0.0.1'
+        platform_broker_port = '5762'
     try:
-        port = config.get('broker', 'port')
+        platform_broker_vhost = config.get('platform_broker', 'vhost')
     except configparser.NoOptionError:
-        port = '5762'
+        platform_broker_vhost = '/'
     try:
-        vhost = config.get('broker', 'vhost')
+        platform_broker_db = config.get('platform_broker', 'db')
     except configparser.NoOptionError:
-        vhost = '/'
+        platform_broker_db = 0
+    try:
+        platform_broker_username = config.get('platform_broker', 'username')
+    except configparser.NoOptionError:
+        platform_broker_username = 'bot'
+    try:
+        platform_broker_password = config.get('platform_broker', 'password')
+    except configparser.NoOptionError:
+        platform_broker_password = 'b0t'
+    ## -------------------------------------------------------------
+    ## ----------------------- Local Broker Parameters -------------------
+    ## -------------------------------------------------------------
+    try:
+        local_broker_username = config.get('local_broker', 'username')
+    except configparser.NoOptionError:
+        local_broker_username = ''
+    try:
+        local_broker_password = config.get('local_broker', 'password')
+    except configparser.NoOptionError:
+        local_broker_password = ''
+    try:
+        local_broker_host = config.get('local_broker', 'host')
+    except configparser.NoOptionError:
+        local_broker_host = 'localhost'
+    try:
+        local_broker_port = config.get('local_broker', 'port')
+    except configparser.NoOptionError:
+        local_broker_port = '6379'
+    try:
+        local_broker_type = config.get('local_broker', 'type')
+    except configparser.NoOptionError:
+        local_broker_type = 'REDIS'
+    try:
+        local_broker_vhost = config.get('local_broker', 'vhost')
+    except configparser.NoOptionError:
+        local_broker_vhost = '/'
+    try:
+        local_broker_db = config.get('local_broker', 'db')
+    except configparser.NoOptionError:
+        local_broker_db = 0
     ## -------------------------------------------------------------
     ## ------------------ Control Interfaces -----------------------
     ## -------------------------------------------------------------
@@ -187,11 +226,31 @@ def load_cfg(cfg_file):
         'keep_app_tarballls': keep_app_tarballls,
         'app_storage_dir': app_storage_dir,
         'app_image_prefix': app_image_prefix,
-        'username': username,
-        'password': password,
-        'host': host,
-        'port': port,
-        'vhost': vhost,
+        'platform_broker': {
+            'type': platform_broker_type,
+            'username': platform_broker_username,
+            'password': platform_broker_password,
+            'host': platform_broker_host,
+            'port': platform_broker_port,
+            'vhost': platform_broker_vhost,
+            'db': platform_broker_db
+        },
+        'local_broker': {
+            'type': local_broker_type,
+            'username': local_broker_username,
+            'password': local_broker_password,
+            'host': local_broker_host,
+            'port': local_broker_port,
+            'vhost': local_broker_vhost,
+            'db': local_broker_db
+        },
+        'redis': {
+            'host': redis_host,
+            'port': redis_port,
+            'db': redis_db,
+            'password': redis_password,
+            'app_list_name': redis_app_list_name,
+        },
         'heartbeat_interval': heartbeat_interval,
         'heartbeat_topic': heartbeat_topic,
         'app_delete_rpc_name': app_delete_rpc_name,
@@ -203,11 +262,6 @@ def load_cfg(cfg_file):
         'alive_rpc_name': alive_rpc_name,
         'connected_event': connected_event,
         'disconnected_event': disconnected_event,
-        'redis_host': redis_host,
-        'redis_port': redis_port,
-        'redis_db': redis_db,
-        'redis_password': redis_password,
-        'redis_app_list_name': redis_app_list_name,
         'app_started_event': app_started_event,
         'app_stopped_event': app_stopped_event,
         'app_logs_topic': app_logs_topic,

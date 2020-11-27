@@ -64,15 +64,15 @@ def main():
     ## Parameters passed from CLI are getting priority and override
     ## those defined in the configuration file
     if username is not None:
-        config['username'] = username
+        config['platform_broker']['username'] = username
     if password is not None:
-        config['password'] = password
+        config['platform_broker']['password'] = password
     if host is not None:
-        config['host'] = host
+        config['platform_broker']['host'] = host
     if port is not None:
-        config['port'] = port
+        config['platform_broker']['port'] = port
     if vhost is not None:
-        config['vhost'] = vhost
+        config['platform_broker']['vhost'] = vhost
     if heartbeat is not None:
         config['heartbeat_interval'] = heartbeat
 
@@ -81,10 +81,9 @@ def main():
     print('==================================================================')
 
     manager = AppManager(
-        platform_creds=(config['username'], config['password']),
-        platform_host=config['host'],
-        platform_port=config['port'],
-        platform_vhost=config['vhost'],
+        platform_broker_params=config['platform_broker'],
+        local_broker_params=config['local_broker'],
+        redis_params=config['redis'],
         heartbeat_interval=config['heartbeat_interval'],
         heartbeat_topic=config['heartbeat_topic'],
         app_list_rpc_name=config['app_list_rpc_name'],
@@ -96,11 +95,6 @@ def main():
         get_running_apps_rpc_name=config['get_running_apps_rpc_name'],
         connected_event=config['connected_event'],
         disconnected_event=config['disconnected_event'],
-        redis_host=config['redis_host'],
-        redis_port=config['redis_port'],
-        redis_db=config['redis_db'],
-        redis_password=config['redis_password'],
-        redis_app_list_name=config['redis_app_list_name'],
         debug=config['debug'],
         app_build_dir=config['app_build_dir'],
         app_image_prefix=config['app_image_prefix'],
