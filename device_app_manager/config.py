@@ -138,51 +138,46 @@ def load_cfg(cfg_file):
     except configparser.NoOptionError:
         get_running_apps_rpc_name = 'apps.running'
     try:
-        app_delete_rpc_name = config.get('control',
-                                         'app_delete_rpc_name')
+        app_delete_rpc_name = config.get('control', 'app_delete_rpc_name')
     except configparser.NoOptionError:
         app_delete_rpc_name = 'delete_app'
     try:
-        app_install_rpc_name = config.get('control',
-                                          'app_install_rpc_name')
+        app_install_rpc_name = config.get('control', 'app_install_rpc_name')
     except configparser.NoOptionError:
         app_install_rpc_name = 'install_app'
     try:
-        app_start_rpc_name = config.get('control',
-                                        'app_start_rpc_name')
+        app_start_rpc_name = config.get('control', 'app_start_rpc_name')
     except configparser.NoOptionError:
         app_start_rpc_name = 'start_app'
     try:
-        app_stop_rpc_name = config.get('control',
-                                       'app_stop_rpc_name')
+        app_stop_rpc_name = config.get('control', 'app_stop_rpc_name')
     except configparser.NoOptionError:
         app_stop_rpc_name = 'stop_app'
     try:
-        alive_rpc_name = config.get('control',
-                                    'alive_rpc_name')
+        alive_rpc_name = config.get('control', 'alive_rpc_name')
     except configparser.NoOptionError:
         alive_rpc_name = 'is_alive'
+    try:
+        fast_deploy_rpc_name = config.get('control', 'fast_deploy_rpc_name')
+    except configparser.NoOptionError:
+        fast_deploy_rpc_name = 'fast_deploy'
     ## ------------------------------------------------------------
     ## -------------- Monitoring Interfaces -----------------------
     ## ------------------------------------------------------------
     try:
-        heartbeat_topic = config.get('monitoring',
-                                     'heartbeat_topic')
+        heartbeat_topic = config.get('monitoring', 'heartbeat_topic')
     except configparser.NoOptionError:
         heartbeat_topic = 'hearbeat'
     try:
-        heartbeat_interval = config.getint('monitoring',
-                                        'heartbeat_interval')
+        heartbeat_interval = config.getint('monitoring', 'heartbeat_interval')
     except configparser.NoOptionError:
         heartbeat_interval = 10  # seconds
     try:
-        connected_event = config.get('monitoring',
-                                     'connected_event_name')
+        connected_event = config.get('monitoring', 'connected_event_name')
     except configparser.NoOptionError:
         connected_event = 'connected'
     try:
-        disconnected_event = config.get('monitoring',
-                                        'disconnected_event_name')
+        disconnected_event = config.get('monitoring', 'disconnected_event_name')
     except configparser.NoOptionError:
         disconnected_event = 'disconnected'
     ## ------------------------------------------------------------
@@ -244,6 +239,18 @@ def load_cfg(cfg_file):
                                                   'delete_sentences_rpc')
     except configparser.NoOptionError:
         rhasspy_delete_sentences_rpc = 'rhasspy_ctrl.delete_sentences'
+    ## -----------------------------------------------------------------
+    ## ------------------ Audio-Events Parameters ----------------------
+    ## ----------------------------------------------------------------
+    try:
+        audio_events_enable = config.get('audio_events', 'enable')
+    except configparser.NoOptionError:
+        audio_events_enable = 1
+    try:
+        speak_action_uri = config.get('audio_events', 'speak_action_uri')
+    except configparser.NoOptionError:
+        speak_action_uri = \
+            '/robot/robot_1/actuator/audio/speaker/usb_speaker/d0/id_0/speak'
     ## ------------------------------------------------------------
     ## ------------------ Redis Parameters  -----------------------
     ## ------------------------------------------------------------
@@ -332,7 +339,8 @@ def load_cfg(cfg_file):
             'app_install_rpc_name': app_install_rpc_name,
             'app_start_rpc_name': app_start_rpc_name,
             'app_stop_rpc_name': app_stop_rpc_name,
-            'alive_rpc_name': alive_rpc_name
+            'alive_rpc_name': alive_rpc_name,
+            'fast_deploy_rpc_name': fast_deploy_rpc_name
         },
         'rhasspy': {
             'add_sentences_rpc': rhasspy_add_sentences_rpc,
@@ -341,5 +349,9 @@ def load_cfg(cfg_file):
         'ui_manager': {
             'start_rpc': ui_start_rpc,
             'stop_rpc': ui_stop_rpc
+        },
+        'audio_events': {
+            'enable': audio_events_enable,
+            'speak_action_uri': speak_action_uri
         }
     }

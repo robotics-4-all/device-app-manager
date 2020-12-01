@@ -15,10 +15,8 @@ from jinja2 import Template, Environment, PackageLoader, select_autoescape
 from ._logging import create_logger
 from .redis_controller import RedisController
 
-from commlib.transports.amqp import Publisher
-
-from commlib.transports.redis import ActionClient, RPCClient
 from commlib.transports.redis import ConnectionParameters as RedisParams
+from commlib.logger import Logger
 
 
 DOCKER_COMMAND_MAP = {
@@ -45,16 +43,11 @@ class AppExecutorDocker(object):
     APP_STOPED_EVENT = 'thing.x.app.y.stopped'
 
     def __init__(self,
-                 platform_params: dict,
                  redis_params: dict,
                  redis_app_list_name: str,
-                 app_started_event: str,
-                 app_stopped_event: str,
-                 app_logs_topic: str,
-                 app_stats_topic: str,
-                 publish_logs: bool = True,
-                 publish_stats: bool = False,
-                 sound_events: bool = True):
+                 on_app_started: callable = True,
+                 on_app_stopped: callable = True,
+                 logger = None):
         """Constructor.
 
         Args:
@@ -68,39 +61,24 @@ class AppExecutorDocker(object):
             publish_logs (str):
             publish_stats (str):
         """
-        atexit.register(self._cleanup)
-
-        self.platform_params = platform_params
-        self.PLATFORM_APP_LOGS_TOPIC_TPL = app_logs_topic
-        self.PLATFORM_APP_STATS_TOPIC_TPL = app_stats_topic
-        self.APP_STARTED_EVENT = app_started_event
-        self.APP_STOPED_EVENT = app_stopped_event
-
-        self.sound_events = sound_events
-
         self.docker_client = docker.from_env()
-        self.__init_logger()
+        if logger is None:
+            logger = Logger('AppManager-DockerExecutor')
+        self.log = logger
         self.redis = RedisController(redis_params, redis_app_list_name)
         self.running_apps = []  # Array of tuples (app_name, container_name)
-        self.publish_logs = publish_logs
-        self.publish_stats = publish_stats
-        ## TODO: Might change!
-        self._device_id = self.platform_params.credentials.username
+
         self.container_config = DockerContainerConfig()
         self._rparams = RedisParams(host='localhost')
 
-        if self.sound_events:
-            self._speak_action_name = \
-                '/robot/robot_1/actuator/audio/speaker/usb_speaker/d0/id_0/speak'
-            self._speak_action = ActionClient(
-                conn_params=self._rparams, action_name=self._speak_action_name)
+        self._on_app_started = on_app_started
+        self._on_app_stopped = on_app_stopped
 
-    def __init_logger(self):
-        """Initialize Logger."""
-        self.log = create_logger(self.__class__.__name__)
-
-    def run_app(self, app_name: str, app_args: list = [],
-                auto_remove: bool = False):
+    def run_app(self, app_name: str,
+                app_args: list = [],
+                auto_remove: bool = False,
+                logs_publisher = None,
+                stats_publisher = None):
         """Run an Application.
 
         Args:
@@ -127,18 +105,15 @@ class AppExecutorDocker(object):
         self.redis.set_app_container(app_name, _container_name, _container.id)
         self.redis.save_db()
 
-        self._send_app_started_event(app_name)
-
-        # Start custom ui if exists
-        self._start_app_ui_component(app_name)
-
         log_thread = None
-        if self.publish_logs:
-            log_thread = self._detach_app_logging(_container_name, _container)
+        if logs_publisher is not None:
+            log_thread = self._detach_app_logging(_container_name, _container,
+                                                  logs_publisher)
 
         stats_thread = None
-        if self.publish_stats:
-            stats_thread = self._detach_app_stats(_container_name, _container)
+        if stats_publisher is not None:
+            stats_thread = self._detach_app_stats(_container_name, _container,
+                                                  stats_publisher)
 
         exit_capture_thread = self._detach_app_exit_listener(_container_name,
                                                              _container,
@@ -148,7 +123,9 @@ class AppExecutorDocker(object):
                                   log_thread, stats_thread,
                                   exit_capture_thread))
 
-        self._on_app_started(app_name)
+        # Fire the on_app_started callback
+        if self._on_app_started is not None:
+            self._on_app_started(app_name)
 
     def stop_app(self, app_name: str) -> None:
         """Stops application given its name
@@ -163,22 +140,10 @@ class AppExecutorDocker(object):
         c = self.docker_client.containers.get(_container_id)
         try:
             c.stop(timeout=10)
+            c.wait()
         except docker.errors.APIError as exc:  # Not running case
             self.log.warning(exc)
-
-        ## Call Exit handler for this application ------>
-        _aidx = -1
-        for i in range(len(self.running_apps)):
-            if self.running_apps[i][0] == app_name:
-                _aidx = i
-        if _aidx != -1:
-            del self.running_apps[_aidx]
-            c.wait()
         ## <---------------------------------------------
-
-    def _cleanup(self):
-        ## TODO
-        pass
 
     def _run_container(self, image_id, container_name, cmd=None):
         """Run the application container.
@@ -213,54 +178,32 @@ class AppExecutorDocker(object):
         try:
             if not self.redis.app_exists(app_name):
                 raise RuntimeError(
-                    '[AppExitHandler] - App <{}> does not exist'.format(
-                        app_name))
+                    f'[AppExitHandler] - App <{app_name}> does not exist')
             self._on_app_stopped(app_name)
             container.remove(force=True)
             self.redis.set_app_state(app_name, 0)
-            self._send_app_stopped_event(app_name)
             if auto_remove:
                 self.redis.delete_app(app_name)
                 self.docker_client.images.remove(container.image.id,
                                                  force=True)
             self.redis.save_db()
+
+            _aidx = -1
+            for i in range(len(self.running_apps)):
+                if self.running_apps[i][0] == app_name:
+                    _aidx = i
+            if _aidx != -1:
+                del self.running_apps[_aidx]
         except docker.errors.APIError as exc:
             self.log.error(exc, exc_info=True)
         except Exception as exc:
             self.log.error(exc, exc_info=True)
 
-    def _send_app_stopped_event(self, app_name):
-        event_uri = self.APP_STOPED_EVENT.replace(
-            'x', self._device_id).replace('y', app_name)
-
-        p = Publisher(
-            topic=event_uri,
-            conn_params=self.platform_params,
-            debug=False
-        )
-        p.publish({})
-        self.log.debug(
-            'Send <app_stopped> event for application {}'.format(app_name))
-        del p
-
-    def _send_app_started_event(self, app_name):
-        event_uri = self.APP_STARTED_EVENT.replace(
-            'x', self._device_id).replace('y', app_name)
-
-        p = Publisher(
-            topic=event_uri,
-            conn_params=self.platform_params,
-            debug=False
-        )
-        p.publish({})
-        self.log.debug(
-            'Sent <app_started> event for application {}'.format(app_name))
-        del p
-
-    def _detach_app_logging(self, app_name, container):
+    def _detach_app_logging(self, app_name, container, publisher):
         t_stop_event = threading.Event()
-        t = threading.Thread(target=self._app_log_publish_loop,
-                             args=(app_name, t_stop_event, container))
+        t = threading.Thread(target=self._app_logs_publish_loop,
+                             args=(app_name, t_stop_event, container,
+                                   publisher))
         t.daemon = True
         t.start()
         app_log_thread = {
@@ -269,17 +212,10 @@ class AppExecutorDocker(object):
         }
         return app_log_thread
 
-    def _app_log_publish_loop(self, app_name, stop_event, container):
-        topic_logs = self.PLATFORM_APP_LOGS_TOPIC_TPL.replace(
-                'x', self._device_id).replace(
-                        'y', app_name)
-        app_logs_pub = Publisher(topic=topic_logs,
-                                 conn_params=self.platform_params,
-                                 debug=False)
-
-        self.log.info('Initiated remote platform log publisher: {}'.format(
-            topic_logs))
-
+    def _app_logs_publish_loop(self, app_name, stop_event, container,
+                              publisher):
+        self.log.info(
+            f'Initiated remote platform logs publisher for app <{app_name}>')
         try:
             for line in container.logs(stream=True):
                 _log_msg = line.strip().decode('utf-8')
@@ -288,38 +224,17 @@ class AppExecutorDocker(object):
                     'timestamp': 0,
                     'log_msg': _log_msg
                 }
-                app_logs_pub.publish(msg)
+                publisher.publish(msg)
                 if stop_event.is_set():
                     break
         except Exception:
             pass
 
-    def _app_stats_publish_loop(self, app_name, stop_event, container):
-        topic_stats = self.PLATFORM_APP_STATS_TOPIC_TPL.replace(
-                'x', self._device_id).replace(
-                        'y', app_name)
-
-        app_stats_pub = Publisher(topic=topic_stats,
-                                  conn_params=self.platform_params,
-                                  debug=False)
-
-        self.log.info(
-            'Initiated remote platform stats publisher: {}'.format(topic_stats))
-
-        for line in container.stats(
-                decode=True,
-                stream=True):
-            _stats_msg = line
-            app_stats_pub.publish(_stats_msg)
-            if stop_event.is_set():
-                break
-        self.log.info(
-            'Stats Publisher stopped for Application <{}>'.format(app_name))
-
-    def _detach_app_stats(self, app_name, container):
+    def _detach_app_stats(self, app_name, container, publisher):
         t_stop_event = threading.Event()
         t = threading.Thread(target=self._app_stats_publish_loop,
-                             args=(app_name, t_stop_event, container))
+                             args=(app_name, t_stop_event, container,
+                                   publisher))
         t.daemon = True
         t.start()
         app_stats_thread = {
@@ -327,6 +242,21 @@ class AppExecutorDocker(object):
             'stop_event': t_stop_event
         }
         return app_stats_thread
+
+    def _app_stats_publish_loop(self, app_name, stop_event, container,
+                                publisher):
+        self.log.info(
+            f'Initiated remote platform stats publisher for app <{app_name}>')
+
+        for line in container.stats(
+                decode=True,
+                stream=True):
+            _stats_msg = line
+            publisher.publish(_stats_msg)
+            if stop_event.is_set():
+                break
+        self.log.info(
+            f'Stats Publisher stopped for Application <{app_name}>')
 
     def _detach_app_exit_listener(self, app_name, container, auto_remove=False):
         t_stop_event = threading.Event()
@@ -339,37 +269,3 @@ class AppExecutorDocker(object):
             'stop_event': t_stop_event
         }
         return app_exit_thread
-
-    def _on_app_started(self, app_name):
-        return
-        # MANUAL KILL OF SPEAK HERE
-        if self.sound_events:
-            _text = 'Η εφαρμογή {} ξεκίνησε'.format(app_name)
-            speak_goal_data = {
-                'text': _text,
-                'volume': 50,
-                'language': 'el'
-            }
-            try:
-                self._speak_action.send_goal(speak_goal_data)
-            except Exception as exc:
-                self.log.error(exc)
-
-    def _on_app_stopped(self, app_name):
-
-        # Stop custom ui if exists
-        self.log.info("Banishing UI to the dead")
-        res = self.custom_ui_rpc_client_stop.call({}, timeout=1)
-        self.log.info(f"Response from Custom UI: {res}")
-
-        _text = 'Η εφαρμογή {} τερμάτισε'.format(app_name)
-        speak_goal_data = {
-            'text': _text,
-            'volume': 50,
-            'language': 'el'
-        }
-        if self.sound_events:
-            try:
-                self._speak_action.send_goal(speak_goal_data, timeout=1)
-            except Exception as exc:
-                self.log.error(exc)

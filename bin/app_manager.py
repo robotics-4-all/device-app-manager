@@ -89,7 +89,8 @@ def main():
         config['applications'],
         config['control'],
         config['rhasspy'],
-        config['ui_manager']
+        config['ui_manager'],
+        config['audio_events']
     )
     try:
         manager.run()

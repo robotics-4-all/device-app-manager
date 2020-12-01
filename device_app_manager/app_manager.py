@@ -51,7 +51,8 @@ class AppManager(object):
                  app_params,
                  control_params,
                  rhasspy_params,
-                 ui_manager_params):
+                 ui_manager_params,
+                 audio_events_params):
         atexit.register(self._cleanup)
 
         self._platform_broker_params = platform_broker_params
@@ -63,15 +64,14 @@ class AppManager(object):
         self._control_params = control_params
         self._rhasspy_params = rhasspy_params
         self._ui_manager_params = ui_manager_params
+        self._audio_events_params = audio_events_params
 
         self.debug = core_params['debug']
 
-        # self._init_platform_node()
+        self._init_platform_node()
         self._init_local_node()
 
         self.log = Logger('AppManager', debug=True)
-
-        # self.__init_logger()
 
         redis_params = RedisConnectionParams(
             host=redis_params['host'],
@@ -95,19 +95,15 @@ class AppManager(object):
             image_prefix=self._core_params['app_image_prefix']
         )
 
-        # self.app_executor = AppExecutorDocker(
-        #     self.broker_conn_params,
-        #     redis_params,
-        #     redis_app_list_name=self._redis_params['app_list_name'],
-        #     app_started_event=self._app_params['app_started_event'],
-        #     app_stopped_event=self._app_params['app_stopped_event'],
-        #     app_logs_topic=self._app_params['app_logs_topic'],
-        #     app_stats_topic=self._app_params['app_stats_topic'],
-        #     publish_logs=self._app_params['publish_app_logs'],
-        #     publish_stats=self._app_params['publish_app_stats']
-        # )
+        self.app_executor = AppExecutorDocker(
+            redis_params,
+            redis_app_list_name=self._redis_params['app_list_name'],
+            on_app_started=self._on_app_started,
+            on_app_stopped=self._on_app_stopped
+        )
         self._clean_startup()
         self._init_rhassy_endpoints()
+        self._init_ui_manager_endpoints()
 
     def _clean_startup(self):
         self.log.info('Prune stopped containers...')
@@ -220,8 +216,34 @@ class AppManager(object):
         if app['state'] == 1:
             raise ValueError('Application is allready running.')
 
-        self.app_executor.run_app(app_name, app_args, auto_remove=auto_remove)
+        _logs_topic = self._app_params['app_logs_topic']
+        _logs_topic = self.__add_platform_ns(_logs_topic)
+        _logs_topic = _logs_topic.replace('{APP_ID}', app_name)
+        logs_publisher = self._local_node.create_publisher(
+            topic=_logs_topic)
+
+        self.app_executor.run_app(app_name, app_args, auto_remove=auto_remove,
+                                  logs_publisher=logs_publisher)
         return app_name
+
+    def _on_app_started(self, app_id: str):
+        self._send_app_started_event(app_id)
+        self._start_app_ui_component(app_id)
+
+    def _on_app_stopped(self, app_id: str):
+        self._send_app_stopped_event(app_id)
+        self._stop_app_ui_component(app_id)
+        if self._audio_events_params['enable']:
+            _text = f'Η εφαρμογή {app_id} τερμάτισε'
+            speak_goal_data = {
+                'text': _text,
+                'volume': 50,
+                'language': 'el'
+            }
+            try:
+                self._speak_action.send_goal(speak_goal_data, timeout=1)
+            except Exception as exc:
+                self.log.error(exc)
 
     def stop_app(self, app_name):
         if not self.redis.app_exists(app_name):
@@ -245,38 +267,98 @@ class AppManager(object):
         self.start_app(app_name, app_args=app_args, auto_remove=True)
         return app_name
 
-    # def _init_platform_node(self):
-    #     if self._platform_broker_params['type'] == 'REDIS':
-    #         from commlib.transports.redis import ConnectionParameters
-    #         conn_params = ConnectionParameters(
-    #             host=self._platform_broker_params['host'],
-    #             port=self._platform_broker_params['port'],
-    #             db=self._platform_broker_params['db'])
-    #         conn_params.credentials.username = \
-    #             self._platform_broker_params['username']
-    #         conn_params.credentials.password = \
-    #             self._platform_broker_params['password']
-    #         _btype = TransportType.REDIS
-    #     elif self._platform_broker_params['type'] == 'AMQP':
-    #         from commlib.transports.amqp import ConnectionParameters
-    #         conn_params = ConnectionParameters(
-    #             host=self._platform_broker_params['host'],
-    #             port=self._platform_broker_params['port'],
-    #             vhost=self._platform_broker_params['vhost'])
-    #         conn_params.credentials.username = \
-    #             self._platform_broker_params['username']
-    #         conn_params.credentials.password = \
-    #             self._platform_broker_params['password']
-    #         _btype = TransportType.AMQP
+    def _init_platform_node(self):
+        if self._platform_broker_params['type'] == 'REDIS':
+            from commlib.transports.redis import ConnectionParameters
+            conn_params = ConnectionParameters(
+                host=self._platform_broker_params['host'],
+                port=self._platform_broker_params['port'],
+                db=self._platform_broker_params['db'])
+            conn_params.credentials.username = \
+                self._platform_broker_params['username']
+            conn_params.credentials.password = \
+                self._platform_broker_params['password']
+            _btype = TransportType.REDIS
+        elif self._platform_broker_params['type'] == 'AMQP':
+            from commlib.transports.amqp import ConnectionParameters
+            conn_params = ConnectionParameters(
+                host=self._platform_broker_params['host'],
+                port=self._platform_broker_params['port'],
+                vhost=self._platform_broker_params['vhost'])
+            conn_params.credentials.username = \
+                self._platform_broker_params['username']
+            conn_params.credentials.password = \
+                self._platform_broker_params['password']
+            _btype = TransportType.AMQP
 
-    #     self._platform_node = Node('app_manager',
-    #                                transport_type=_btype,
-    #                                transport_connection_params=conn_params,
-    #                                debug=self.debug)
+        self._platform_node = Node('app_manager',
+                                   transport_type=_btype,
+                                   transport_connection_params=conn_params,
+                                   debug=self.debug)
 
-    #     _hb_topic = self._monitoring_params['heartbeat_topic'].replace(
-    #         '{DEVICE_ID}', self._core_params['device_id']),
-    #     self._platform_node.init_heartbeat_thread(_hb_topic)
+        _hb_topic = self._monitoring_params['heartbeat_topic']
+        _hb_topic = self.__add_platform_ns(_hb_topic)
+        self._platform_node.init_heartbeat_thread(_hb_topic)
+
+        self._platform_event_emitter = \
+            self._platform_node.create_event_emitter()
+
+        # ---------------------- Alive RPC Service ----------------------
+        rpc_name = self._control_params['alive_rpc_name']
+        rpc_name = self.__add_platform_ns(rpc_name)
+        self._platform_node.create_rpc(
+            rpc_name=rpc_name,
+            on_request=self._isalive_rpc_callback,
+            debug=self.debug).run()
+        # --------------------- Get-Apps RPC Service --------------------
+        rpc_name = self._control_params['app_list_rpc_name']
+        rpc_name = self.__add_platform_ns(rpc_name)
+        self._platform_node.create_rpc(
+            rpc_name=rpc_name,
+            on_request=self._get_apps_rpc_callback,
+            debug=self.debug).run()
+        # ----------------- Get-Running-Apps RPC Service ----------------
+        rpc_name = self._control_params['get_running_apps_rpc_name']
+        rpc_name = self.__add_platform_ns(rpc_name)
+        self._platform_node.create_rpc(
+            rpc_name=rpc_name,
+            on_request=self._get_running_apps_rpc_callback,
+            debug=self.debug).run()
+        # -------------------- Install-App RPC Service ------------------
+        rpc_name = self._control_params['app_install_rpc_name']
+        rpc_name = self.__add_platform_ns(rpc_name)
+        self._platform_node.create_rpc(
+            rpc_name=rpc_name,
+            on_request=self._install_app_rpc_callback,
+            debug=self.debug).run()
+        # --------------------- Start-App RPC Service -------------------
+        rpc_name = self._control_params['app_start_rpc_name']
+        rpc_name = self.__add_platform_ns(rpc_name)
+        self._platform_node.create_rpc(
+            rpc_name=rpc_name,
+            on_request=self._start_app_rpc_callback,
+            debug=self.debug).run()
+        # --------------------- Stop-App RPC Service --------------------
+        rpc_name = self._control_params['app_stop_rpc_name']
+        rpc_name = self.__add_platform_ns(rpc_name)
+        self._platform_node.create_rpc(
+            rpc_name=rpc_name,
+            on_request=self._stop_app_rpc_callback,
+            debug=self.debug).run()
+        # --------------------- Delete-App RPC Service --------------------
+        rpc_name = self._control_params['app_delete_rpc_name']
+        rpc_name = self.__add_platform_ns(rpc_name)
+        self._platform_node.create_rpc(
+            rpc_name=rpc_name,
+            on_request=self._delete_app_rpc_callback,
+            debug=self.debug).run()
+        # --------------------- Fast-Deploy-App RPC Service --------------------
+        rpc_name = self._control_params['fast_deploy_rpc_name']
+        rpc_name = self.__add_platform_ns(rpc_name)
+        self._platform_node.create_rpc(
+            rpc_name=rpc_name,
+            on_request=self._fast_deploy_rpc_callback,
+            debug=self.debug).run()
 
     def _init_local_node(self):
         if self._local_broker_params['type'] == 'REDIS':
@@ -312,6 +394,63 @@ class AppManager(object):
 
         self._local_event_emitter = self._local_node.create_event_emitter()
 
+        # ---------------------- Alive RPC Service ----------------------
+        rpc_name = self._control_params['alive_rpc_name']
+        rpc_name = self.__add_local_ns(rpc_name)
+        self._local_node.create_rpc(
+            rpc_name=rpc_name,
+            on_request=self._isalive_rpc_callback,
+            debug=self.debug).run()
+        # --------------------- Get-Apps RPC Service --------------------
+        rpc_name = self._control_params['app_list_rpc_name']
+        rpc_name = self.__add_local_ns(rpc_name)
+        self._local_node.create_rpc(
+            rpc_name=rpc_name,
+            on_request=self._get_apps_rpc_callback,
+            debug=self.debug).run()
+        # ----------------- Get-Running-Apps RPC Service ----------------
+        rpc_name = self._control_params['get_running_apps_rpc_name']
+        rpc_name = self.__add_local_ns(rpc_name)
+        self._local_node.create_rpc(
+            rpc_name=rpc_name,
+            on_request=self._get_running_apps_rpc_callback,
+            debug=self.debug).run()
+        # -------------------- Install-App RPC Service ------------------
+        rpc_name = self._control_params['app_install_rpc_name']
+        rpc_name = self.__add_local_ns(rpc_name)
+        self._local_node.create_rpc(
+            rpc_name=rpc_name,
+            on_request=self._install_app_rpc_callback,
+            debug=self.debug).run()
+        # --------------------- Start-App RPC Service -------------------
+        rpc_name = self._control_params['app_start_rpc_name']
+        rpc_name = self.__add_local_ns(rpc_name)
+        self._local_node.create_rpc(
+            rpc_name=rpc_name,
+            on_request=self._start_app_rpc_callback,
+            debug=self.debug).run()
+        # --------------------- Stop-App RPC Service --------------------
+        rpc_name = self._control_params['app_stop_rpc_name']
+        rpc_name = self.__add_local_ns(rpc_name)
+        self._local_node.create_rpc(
+            rpc_name=rpc_name,
+            on_request=self._stop_app_rpc_callback,
+            debug=self.debug).run()
+        # --------------------- Delete-App RPC Service --------------------
+        rpc_name = self._control_params['app_delete_rpc_name']
+        rpc_name = self.__add_local_ns(rpc_name)
+        self._local_node.create_rpc(
+            rpc_name=rpc_name,
+            on_request=self._delete_app_rpc_callback,
+            debug=self.debug).run()
+        # --------------------- Fast-Deploy-App RPC Service --------------------
+        rpc_name = self._control_params['fast_deploy_rpc_name']
+        rpc_name = self.__add_local_ns(rpc_name)
+        self._local_node.create_rpc(
+            rpc_name=rpc_name,
+            on_request=self._fast_deploy_rpc_callback,
+            debug=self.debug).run()
+
     def _cleanup(self):
         self._send_disconnected_event()
         _rapps = self.redis.get_running_apps()
@@ -322,103 +461,20 @@ class AppManager(object):
         if not os.path.exists(self._core_params['app_storage_dir']):
             os.mkdir(self._core_params['app_storage_dir'])
 
-    def _init_isalive_rpc(self, bnode, uri):
-        rpc_name = self._control_params['alive_rpc_name'].replace(
-            '{DEVICE_ID}', self._core_params['device_id'])
-        rpc = bnode(
-            rpc_name=rpc_name,
-            on_request=self._isalive_rpc_callback,
-            debug=self.debug)
-        rpc.run()
-        return rpc
-
-    def _init_app_list_rpc(self, bnode):
-        rpc_name = self.APP_LIST_RPC_NAME.replace(
-            'x', self._platform_broker_params['username'])
-        self._app_list_rpc = RPCService(
-            rpc_name=rpc_name,
-            on_request=self._get_apps_rpc_callback,
-            conn_params=self.broker_conn_params,
-            debug=self.debug)
-        self._app_list_rpc.run()
-
-    def _init_get_running_apps_rpc(self, bnode):
-        rpc_name = self.GET_RUNNING_APPS_RPC_NAME.replace(
-            'x', self._platform_broker_params['username'])
-        self._running_apps_rpc = RPCService(
-            rpc_name=rpc_name,
-            on_request=self._get_running_apps_rpc_callback,
-            conn_params=self.broker_conn_params,
-            debug=self.debug)
-        self._running_apps_rpc.run()
-
-    def _init_app_install_rpc(self):
-        rpc_name = self.APP_INSTALL_RPC_NAME.replace(
-                'x', self._platform_broker_params['username'])
-        self._install_rpc = RPCService(
-            rpc_name=rpc_name,
-            on_request=self._install_app_rpc_callback,
-            conn_params=self.broker_conn_params,
-            debug=self.debug)
-        self._install_rpc.run()
-
-    def _init_app_start_rpc(self):
-        rpc_name = self.APP_START_RPC_NAME.replace(
-                'x', self._platform_broker_params['username'])
-        self._start_rpc = RPCService(
-            rpc_name=rpc_name,
-            on_request=self._start_app_rpc_callback,
-            conn_params=self.broker_conn_params,
-            debug=self.debug)
-        self._start_rpc.run()
-
-    def _init_app_stop_rpc(self):
-        rpc_name = self.APP_STOP_RPC_NAME.replace(
-            '{DEVICE_ID}', self._core_params['device_id'])
-        self._stop_rpc = self._local_node.create_rpc_client(
-            rpc_name=rpc_name,
-            on_request=self._stop_app_rpc_callback)
-        self._stop_rpc.run()
-
-    def _init_app_delete_rpc(self):
-        rpc_name = self.APP_DELETE_RPC_NAME.replace(
-            'x', self._platform_broker_params['username'])
-        self._delete_rpc = RPCService(
-            rpc_name=rpc_name,
-            on_request=self._delete_app_rpc_callback,
-            conn_params=self.broker_conn_params,
-            debug=self.debug)
-        self._delete_rpc.run()
-
-    def _init_app_fast_deploy_rpc(self):
-        rpc_name = self.APP_FAST_DEPLOY_RPC_NAME.replace(
-            'x', self._platform_broker_params['username'])
-        self._fast_deploy_rpc = RPCService(
-            rpc_name=rpc_name,
-            on_request=self._fast_deploy_rpc_callback,
-            conn_params=self.broker_conn_params,
-            debug=self.debug)
-        self._fast_deploy_rpc.run()
-
     def _init_rhassy_endpoints(self):
         rpc_name = self._rhasspy_params['add_sentences_rpc'].replace(
             '{DEVICE_ID}', self._core_params['device_id'])
         self._rhasspy_add_sentences = self._local_node.create_rpc_client(
             rpc_name=rpc_name,
             debug=self.debug)
-        # rpc_name = self._rhasspy_params['delete_sentences_rpc'].replace(
-        #     '{DEVICE_ID}', self._core_params['device_id'])
-        # self._rhasspy_delete_sentences = self._local_node.create_rpc_client(
-        #     rpc_name=rpc_name,
-        #     debug=self.debug)
 
-    def _isalive_rpc_callback(self, msg, meta):
+    def _isalive_rpc_callback(self, msg, meta=None):
         self.log.debug('Call <is_alive> RPC')
         return {
             'status': 200
         }
 
-    def _install_app_rpc_callback(self, msg, meta):
+    def _install_app_rpc_callback(self, msg, meta=None):
         try:
             self.log.debug('Call <install-app> RPC')
             if 'app_id' not in msg:
@@ -436,7 +492,7 @@ class AppManager(object):
             tarball_b64 = app_file['data']
 
             tarball_path = self._store_app_tar(
-                tarball_b64, self.APP_STORAGE_DIR)
+                tarball_b64, self._core_params['app_storage_dir'])
 
             app_id = self.install_app(app_name, app_type, tarball_path)
 
@@ -453,7 +509,7 @@ class AppManager(object):
                 'error': str(e)
             }
 
-    def _delete_app_rpc_callback(self, msg, meta):
+    def _delete_app_rpc_callback(self, msg, meta=None):
         try:
             self.log.debug('Call <delete-app> RPC')
             if 'app_id' not in msg:
@@ -479,7 +535,7 @@ class AppManager(object):
                 'error': str(e)
             }
 
-    def _start_app_rpc_callback(self, msg, meta):
+    def _start_app_rpc_callback(self, msg, meta=None):
         resp =  {
             'status': 200,
             'error': ''
@@ -505,7 +561,7 @@ class AppManager(object):
         finally:
             return resp
 
-    def _stop_app_rpc_callback(self, msg, meta):
+    def _stop_app_rpc_callback(self, msg, meta=None):
         resp = {
             'status': 200,
             'error': ''
@@ -531,7 +587,7 @@ class AppManager(object):
         finally:
             return resp
 
-    def _fast_deploy_rpc_callback(self, msg, meta):
+    def _fast_deploy_rpc_callback(self, msg, meta=None):
         resp = {
             'status': 200,
             'error': '',
@@ -566,7 +622,7 @@ class AppManager(object):
             app_tar = msg['app_tarball']
             tarball_b64 =  app_tar['data']
             tarball_path = self._store_app_tar(
-                tarball_b64, self.APP_STORAGE_DIR)
+                tarball_b64, self._core_params['app_storage_dir'])
             app_id = self.fast_deploy(app_name, app_type,
                                       tarball_path, app_args)
             resp['app_id'] = app_id
@@ -578,7 +634,7 @@ class AppManager(object):
         finally:
             return resp
 
-    def _get_apps_rpc_callback(self, msg, meta):
+    def _get_apps_rpc_callback(self, msg, meta=None):
         resp = {
             'status': 200,
             'apps': [],
@@ -594,7 +650,7 @@ class AppManager(object):
             resp['error'] = str(e)
             return resp
 
-    def _get_running_apps_rpc_callback(self, msg, meta):
+    def _get_running_apps_rpc_callback(self, msg, meta=None):
         resp = {
             'status': 200,
             'apps': [],
@@ -613,31 +669,38 @@ class AppManager(object):
     def _send_connected_event(self):
         _uri = f'{self._monitoring_params["connected_event"]}'
         _uri = self.__add_local_ns(_uri)
-        print(_uri)
-        event = Event('Connected', _uri)
+        event = Event('AppManager-Connected', _uri)
         self._local_event_emitter.send_event(event)
+        self._platform_event_emitter.send_event(event)
 
     def _send_disconnected_event(self):
         _uri = f'{self._monitoring_params["disconnected_event"]}'
         _uri = self.__add_local_ns(_uri)
-        event = Event('Disconnected', _uri)
+        event = Event('AppManager-Disconnected', _uri)
         self._local_event_emitter.send_event(event)
+        self._platform_event_emitter.send_event(event)
 
-    def __add_local_ns(self, uri: str):
-        _ns = self._core_params['uri_namespace']
-        _local_ns = self._local_broker_params['uri_namespace']
-        if _ns != '':
-            uri = f'{_ns}.{uri}'
-        if _local_ns != '':
-            uri = f'{_local_ns}.{uri}'
-        uri = uri.replace('{DEVICE_ID}', self._core_params['device_id'])
-        return uri
+    def _send_app_started_event(self, app_id):
+        _uri = f'{self._app_params["app_started_event"]}'
+        _uri = self.__add_local_ns(_uri)
+        _uri = _uri.replace('{APP_ID}', app_id)
+        event = Event('Application-Started', _uri)
+        self._local_event_emitter.send_event(event)
+        self._platform_event_emitter.send_event(event)
+
+    def _send_app_stopped_event(self, app_id):
+        _uri = f'{self._app_params["app_stopped_event"]}'
+        _uri = self.__add_local_ns(_uri)
+        _uri = _uri.replace('{APP_ID}', app_id)
+        event = Event('Application-Stopped', _uri)
+        self._local_event_emitter.send_event(event)
+        self._platform_event_emitter.send_event(event)
 
     def _store_app_tar(self, tar_b64, dest_dir):
         tarball_decoded = base64.b64decode(tar_b64)
         u_id = uuid.uuid4().hex[0:8]
         tarball_path = os.path.join(
-            self.APP_STORAGE_DIR,
+            self._core_params['app_storage_dir'],
             'app-{}.tar.gz'.format(u_id)
         )
         with open(tarball_path, 'wb') as f:
@@ -662,12 +725,49 @@ class AppManager(object):
         else:
             self.log.info("No UI for this app")
 
+    def _stop_app_ui_component(self, app_name: str) -> None:
+        ui = self.redis.get_app(app_name)['ui']
+        if ui is not None:
+            self.log.info("Banishing UI to the dead")
+            res = self._ui_stop.call({}, timeout=1)
+            self.log.info(f"Response from Custom UI: {res}")
+
     def _init_ui_manager_endpoints(self):
         rpc_name = self._ui_manager_params['start_rpc'].replace(
             '{DEVICE_ID}', self._core_params['device_id'])
         self._ui_start = self._local_node.create_rpc_client(
             rpc_name=rpc_name,
             debug=self.debug)
+        rpc_name = self._ui_manager_params['stop_rpc'].replace(
+            '{DEVICE_ID}', self._core_params['device_id'])
+        self._ui_stop = self._local_node.create_rpc_client(
+            rpc_name=rpc_name,
+            debug=self.debug)
+
+    def _init_speak_client(self):
+        self._speak_action = self._local_node.create_action_client(
+            action_name=self._audio_events_params['speak_action_uri']
+        )
+
+    def __add_local_ns(self, uri: str):
+        _ns = self._core_params['uri_namespace']
+        _local_ns = self._local_broker_params['uri_namespace']
+        if _ns != '':
+            uri = f'{_ns}.{uri}'
+        if _local_ns != '':
+            uri = f'{_local_ns}.{uri}'
+        uri = uri.replace('{DEVICE_ID}', self._core_params['device_id'])
+        return uri
+
+    def __add_platform_ns(self, uri: str):
+        _ns = self._core_params['uri_namespace']
+        _platform_ns = self._platform_broker_params['uri_namespace']
+        if _ns != '':
+            uri = f'{_ns}.{uri}'
+        if _platform_ns != '':
+            uri = f'{_platform_ns}.{uri}'
+        uri = uri.replace('{DEVICE_ID}', self._core_params['device_id'])
+        return uri
 
     def run(self):
         self._send_connected_event()
