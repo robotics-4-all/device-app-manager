@@ -16,11 +16,7 @@ import json
 import redis
 import docker
 
-from commlib.transports.amqp import (
-    Publisher, ConnectionParameters, RPCService
-)
-
-from commlib.node import TransportType
+from commlib.node import TransportType, Node
 from commlib.logger import RemoteLogger
 
 from .docker_builder import AppBuilderDocker
@@ -73,7 +69,6 @@ class AppManager(object):
             Not the same as AMQP heartbeats. Device Manager sends
             heartbeat messages at a specific topic.
         debug (bool) Enable/Disable debug mode.
-        app_build_dir (str):
         stop_apps_on_exit (bool): Currently not supported feature!
         keep_app_tarballls (bool):
         app_storage_dir (str):
@@ -99,79 +94,35 @@ class AppManager(object):
     APP_UIS_DIR = "/home/pi/.config/device_app_manager/"
 
     def __init__(self,
-                 heartbeat_interval=10,
-                 debug=True,
-                 platform_broker_params=None,
-                 local_broker_params=None,
-                 redis_params=None,
-                 app_build_dir=None,
-                 stop_apps_on_exit=None,
-                 keep_app_tarballls=None,
-                 app_storage_dir=None,
-                 app_image_prefix=None,
-                 app_list_rpc_name=None,
-                 get_running_apps_rpc_name=None,
-                 app_delete_rpc_name=None,
-                 app_install_rpc_name=None,
-                 app_start_rpc_name=None,
-                 app_stop_rpc_name=None,
-                 app_fast_deploy_rpc_name=None,
-                 alive_rpc_name=None,
-                 heartbeat_topic=None,
-                 connected_event=None,
-                 disconnected_event=None,
-                 app_started_event=None,
-                 app_stopped_event=None,
-                 app_logs_topic=None,
-                 app_stats_topic=None,
-                 publish_app_logs=None,
-                 publish_app_stats=None):
+                 platform_broker_params,
+                 local_broker_params,
+                 redis_params,
+                 core_params,
+                 monitoring_params,
+                 app_params,
+                 control_params):
         atexit.register(self._cleanup)
-
-        self.HEARTBEAT_INTERVAL = heartbeat_interval
-        if app_list_rpc_name is not None:
-            self.APP_LIST_RPC_NAME = app_list_rpc_name
-        if app_delete_rpc_name is not None:
-            self.APP_DELETE_RPC_NAME = app_delete_rpc_name
-        if app_install_rpc_name is not None:
-            self.APP_INSTALL_RPC_NAME = app_install_rpc_name
-        if app_start_rpc_name is not None:
-            self.APP_START_RPC_NAME = app_start_rpc_name
-        if app_start_rpc_name is not None:
-            self.APP_START_RPC_NAME = app_start_rpc_name
-        if app_stop_rpc_name is not None:
-            self.APP_STOP_RPC_NAME = app_stop_rpc_name
-        if app_fast_deploy_rpc_name is not None:
-            self.APP_FAST_DEPLOY_RPC_NAME = app_fast_deploy_rpc_name
-        if alive_rpc_name is not None:
-            self.ISALIVE_RPC_NAME = alive_rpc_name
-        if get_running_apps_rpc_name is not None:
-            self.GET_RUNNING_APPS_RPC_NAME = get_running_apps_rpc_name
-        if heartbeat_topic is not None:
-            self.HEARTBEAT_TOPIC = heartbeat_topic
-        if connected_event is not None:
-            self.THING_CONNECTED_EVENT = connected_event
-        if disconnected_event is not None:
-            self.THING_DISCONNECTED_EVENT = disconnected_event
-        self.APP_STORAGE_DIR = os.path.expanduser(self.APP_STORAGE_DIR)
 
         self._platform_broker_params = platform_broker_params
         self._local_broker_params = local_broker_params
         self._redis_params = redis_params
+        self._core_params = core_params
+        self._monitoring_params = monitoring_params
+        self._app_params = app_params
+        self._control_params = control_params
 
-        self._heartbeat_data = {}
-        self._heartbeat_thread = None
         self.apps = {}
-
         self._deploy_rpc = None
         self._delete_rpc = None
         self._start_rpc = None
         self._install_rpc = None
         self._stop_rpc = None
 
-        self._init_platform_params()
+
+        self._init_platform_node()
+        self._init_local_node()
+
         self.__init_logger()
-        self.debug = debug
 
         redis_params = RedisConnectionParams(
             host=redis_params['host'],
@@ -185,25 +136,26 @@ class AppManager(object):
 
         self._create_app_storage_dir()
 
-        self.redis = RedisController(redis_params, self._redis_params['app_list_name'])
+        self.redis = RedisController(redis_params,
+                                     self._redis_params['app_list_name'])
         if not self.redis.ping():
             raise Exception('Could not connect to redis server.')
 
         self.app_builder = AppBuilderDocker(
-            build_dir=app_build_dir,
-            image_prefix=app_image_prefix
+            build_dir=self._core_params['app_build_dir'],
+            image_prefix=self._core_params['app_image_prefix']
         )
 
         self.app_executor = AppExecutorDocker(
             self.broker_conn_params,
             redis_params,
             redis_app_list_name=self._redis_params['app_list_name'],
-            app_started_event=app_started_event,
-            app_stopped_event=app_stopped_event,
-            app_logs_topic=app_logs_topic,
-            app_stats_topic=app_stats_topic,
-            publish_logs=publish_app_logs,
-            publish_stats=publish_app_stats
+            app_started_event=self._app_params['app_started_event'],
+            app_stopped_event=self._app_params['app_stopped_event'],
+            app_logs_topic=self._app_params['app_logs_topic'],
+            app_stats_topic=self._app_params['app_stats_topic'],
+            publish_logs=self._app_params['publish_app_logs'],
+            publish_stats=self._app_params['publish_app_stats']
         )
         self._clean_startup()
         self._init_rhassy_sentences_client()
@@ -344,15 +296,70 @@ class AppManager(object):
         self.start_app(app_name, app_args=app_args, auto_remove=True)
         return app_name
 
-    def _init_platform_params(self):
-        self.broker_conn_params = ConnectionParameters(
-            host=self._platform_broker_params['host'],
-            port=self._platform_broker_params['port'],
-            vhost=self._platform_broker_params['vhost'])
-        self.broker_conn_params.credentials.username = \
-            self._platform_broker_params['username']
-        self.broker_conn_params.credentials.password = \
-            self._platform_broker_params['password']
+    def _init_platform_node(self):
+        if self._platform_broker_params['type'] == 'REDIS':
+            from commlib.transports.redis import ConnectionParameters
+            conn_params = ConnectionParameters(
+                host=self._platform_broker_params['host'],
+                port=self._platform_broker_params['port'],
+                db=self._platform_broker_params['db'])
+            conn_params.credentials.username = \
+                self._platform_broker_params['username']
+            conn_params.credentials.password = \
+                self._platform_broker_params['password']
+            _btype = TransportType.REDIS
+        elif self._platform_broker_params['type'] == 'AMQP':
+            from commlib.transports.amqp import ConnectionParameters
+            conn_params = ConnectionParameters(
+                host=self._platform_broker_params['host'],
+                port=self._platform_broker_params['port'],
+                vhost=self._platform_broker_params['vhost'])
+            conn_params.credentials.username = \
+                self._platform_broker_params['username']
+            conn_params.credentials.password = \
+                self._platform_broker_params['password']
+            _btype = TransportType.AMQP
+
+        self._platform_node = Node('app_manager',
+                                   transport_type=_btype,
+                                   transport_connection_params=conn_params,
+                                   debug=self.debug)
+
+        _hb_topic = self.HEARTBEAT_TOPIC.replace(
+            '{DEVICE_ID}', self._local_broker_params['username']),
+        self._local_node.init_heartbeat_thread(_hb_topic)
+
+    def _init_local_node(self):
+        if self._local_broker_params['type'] == 'REDIS':
+            from commlib.transports.redis import ConnectionParameters
+            conn_params = ConnectionParameters(
+                host=self._local_broker_params['host'],
+                port=self._local_broker_params['port'],
+                db=self._local_broker_params['db'])
+            conn_params.credentials.username = \
+                self._local_broker_params['username']
+            conn_params.credentials.password = \
+                self._local_broker_params['password']
+            _btype = TransportType.REDIS
+        elif self._local_broker_params['type'] == 'AMQP':
+            from commlib.transports.amqp import ConnectionParameters
+            conn_params = ConnectionParameters(
+                host=self._local_broker_params['host'],
+                port=self._local_broker_params['port'],
+                vhost=self._local_broker_params['vhost'])
+            conn_params.credentials.username = \
+                self._local_broker_params['username']
+            conn_params.credentials.password = \
+                self._local_broker_params['password']
+            _btype = TransportType.AMQP
+
+        self._local_node = Node('app_manager',
+                                transport_type=_btype,
+                                transport_connection_params=conn_params,
+                                debug=self.debug)
+        _hb_topic = self.HEARTBEAT_TOPIC.replace(
+            '{DEVICE_ID}', self._local_broker_params['username']),
+        self._local_node.init_heartbeat_thread('app_manager.heartbeat')
 
     def __init_logger(self):
         """Initialize Logger."""
