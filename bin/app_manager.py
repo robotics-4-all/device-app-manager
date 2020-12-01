@@ -81,27 +81,15 @@ def main():
     print('==================================================================')
 
     manager = AppManager(
-        platform_broker_params=config['platform_broker'],
-        local_broker_params=config['local_broker'],
-        redis_params=config['redis'],
-        core_params=config['core'],
-        heartbeat_interval=config['heartbeat_interval'],
-        heartbeat_topic=config['heartbeat_topic'],
-        app_list_rpc_name=config['app_list_rpc_name'],
-        app_delete_rpc_name=config['app_delete_rpc_name'],
-        app_install_rpc_name=config['app_install_rpc_name'],
-        app_start_rpc_name=config['app_start_rpc_name'],
-        app_stop_rpc_name=config['app_stop_rpc_name'],
-        alive_rpc_name=config['alive_rpc_name'],
-        get_running_apps_rpc_name=config['get_running_apps_rpc_name'],
-        connected_event=config['connected_event'],
-        disconnected_event=config['disconnected_event'],
-        app_started_event=config['app_started_event'],
-        app_stopped_event=config['app_stopped_event'],
-        app_logs_topic=config['app_logs_topic'],
-        app_stats_topic=config['app_stats_topic'],
-        publish_app_logs=config['publish_app_logs'],
-        publish_app_stats=config['publish_app_logs']
+        config['platform_broker'],
+        config['local_broker'],
+        config['redis'],
+        config['core'],
+        config['monitoring'],
+        config['applications'],
+        config['control'],
+        config['rhasspy'],
+        config['ui_manager']
     )
     try:
         manager.run()

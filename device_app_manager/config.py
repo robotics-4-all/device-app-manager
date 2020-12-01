@@ -128,92 +128,122 @@ def load_cfg(cfg_file):
     ## ------------------ Control Interfaces -----------------------
     ## ------------------------------------------------------------------------
     try:
-        app_list_rpc_name = config.get('control_interfaces',
+        app_list_rpc_name = config.get('control',
                                        'app_list_rpc_name')
     except configparser.NoOptionError:
-        app_list_rpc_name = 'thing.{DEVICE_ID}.appmanager.apps'
+        app_list_rpc_name = 'apps'
     try:
-        get_running_apps_rpc_name = config.get('control_interfaces',
+        get_running_apps_rpc_name = config.get('control',
                                                'get_running_apps_rpc_name')
     except configparser.NoOptionError:
-        get_running_apps_rpc_name = 'thing.{DEVICE_ID}.appmanager.apps.running'
+        get_running_apps_rpc_name = 'apps.running'
     try:
-        app_delete_rpc_name = config.get('control_interfaces',
+        app_delete_rpc_name = config.get('control',
                                          'app_delete_rpc_name')
     except configparser.NoOptionError:
-        app_delete_rpc_name = 'thing.{DEVICE_ID}.appmanager.delete_app'
+        app_delete_rpc_name = 'delete_app'
     try:
-        app_install_rpc_name = config.get('control_interfaces',
+        app_install_rpc_name = config.get('control',
                                           'app_install_rpc_name')
     except configparser.NoOptionError:
-        app_install_rpc_name = 'thing.{DEVICE_ID}.appmanager.download_app'
+        app_install_rpc_name = 'install_app'
     try:
-        app_start_rpc_name = config.get('control_interfaces',
+        app_start_rpc_name = config.get('control',
                                         'app_start_rpc_name')
     except configparser.NoOptionError:
-        app_start_rpc_name = 'thing.{DEVICE_ID}.appmanager.start_app'
+        app_start_rpc_name = 'start_app'
     try:
-        app_stop_rpc_name = config.get('control_interfaces',
+        app_stop_rpc_name = config.get('control',
                                        'app_stop_rpc_name')
     except configparser.NoOptionError:
-        app_stop_rpc_name = 'thing.{DEVICE_ID}.appmanager.stop_app'
+        app_stop_rpc_name = 'stop_app'
     try:
-        alive_rpc_name = config.get('control_interfaces',
+        alive_rpc_name = config.get('control',
                                     'alive_rpc_name')
     except configparser.NoOptionError:
-        alive_rpc_name = 'thing.{DEVICE_ID}.appmanager.is_alive'
+        alive_rpc_name = 'is_alive'
     ## ------------------------------------------------------------
     ## -------------- Monitoring Interfaces -----------------------
     ## ------------------------------------------------------------
     try:
-        heartbeat_topic = config.get('monitoring_interfaces',
+        heartbeat_topic = config.get('monitoring',
                                      'heartbeat_topic')
     except configparser.NoOptionError:
-        heartbeat_topic = 'thing.{DEVICE_ID}.appmanager.hearbeat'
+        heartbeat_topic = 'hearbeat'
     try:
-        heartbeat_interval = config.getint('monitoring_interfaces',
+        heartbeat_interval = config.getint('monitoring',
                                         'heartbeat_interval')
     except configparser.NoOptionError:
         heartbeat_interval = 10  # seconds
     try:
-        connected_event = config.get('monitoring_interfaces',
-                                     'connected_event')
+        connected_event = config.get('monitoring',
+                                     'connected_event_name')
     except configparser.NoOptionError:
-        connected_event = 'thing.{DEVICE_ID}.appmanager.connected'
+        connected_event = 'connected'
     try:
-        disconnected_event = config.get('monitoring_interfaces',
-                                        'disconnected_event')
+        disconnected_event = config.get('monitoring',
+                                        'disconnected_event_name')
     except configparser.NoOptionError:
-        disconnected_event = 'thing.{DEVICE_ID}.appmanager.disconnected'
+        disconnected_event = 'disconnected'
     ## ------------------------------------------------------------
     ## -------------- Application Interfaces ----------------------
     ## ------------------------------------------------------------
     try:
-        app_started_event = config.get('app_interfaces', 'app_started_event')
+        app_started_event = config.get('applications', 'app_started_event')
     except configparser.NoOptionError:
-        app_started_event = 'thing.{DEVICE_ID}.app.y.started'
+        app_started_event = 'app.y.started'
     try:
-        app_stopped_event = config.get('app_interfaces', 'app_stopped_event')
+        app_stopped_event = config.get('applications', 'app_stopped_event')
     except configparser.NoOptionError:
-        app_stopped_event = 'thing.{DEVICE_ID}.app.y.stopped'
+        app_stopped_event = 'app.y.stopped'
     try:
-        app_logs_topic = config.get('app_interfaces', 'app_logs_topic')
+        app_logs_topic = config.get('applications', 'app_logs_topic')
     except configparser.NoOptionError:
-        app_logs_topic = 'thing.{DEVICE_ID}.app.y.logs'
+        app_logs_topic = 'app.y.logs'
     try:
-        app_stats_topic = config.get('app_interfaces', 'app_stats_topic')
+        app_stats_topic = config.get('applications', 'app_stats_topic')
     except configparser.NoOptionError:
-        app_stats_topic = 'thing.{DEVICE_ID}.app.y.stats'
+        app_stats_topic = 'app.y.stats'
     try:
-        publish_app_logs = config.getboolean('app_interfaces',
+        publish_app_logs = config.getboolean('applications',
                                              'publish_app_logs')
     except configparser.NoOptionError:
         publish_app_logs = False
     try:
-        publish_app_stats = config.getboolean('app_interfaces',
+        publish_app_stats = config.getboolean('applications',
                                               'publish_app_stats')
     except configparser.NoOptionError:
         publish_app_stats = False
+    try:
+        app_ui_storage_dir = config.get('applications', 'app_ui_storage_dir')
+    except configparser.NoOptionError:
+        app_ui_storage_dir = '~/.config/device_app_manager'
+    finally:
+        app_ui_storage_dir = os.path.expanduser(app_ui_storage_dir)
+    ## ------------------------------------------------------------
+    ## --------------- UI-Manager Parameters ----------------------
+    ## ------------------------------------------------------------
+    try:
+        ui_start_rpc = config.get('ui_manager', 'start_rpc')
+    except configparser.NoOptionError:
+        ui_start_rpc = 'ui.custom.start'
+    try:
+        ui_stop_rpc = config.get('ui_manager', 'stop_rpc')
+    except configparser.NoOptionError:
+        ui_stop_rpc = 'ui.custom.stop'
+    ## ------------------------------------------------------------
+    ## ------------------ Rhasspy Parameters ----------------------
+    ## ------------------------------------------------------------
+    try:
+        rhasspy_add_sentences_rpc = config.get('ui_manager',
+                                               'add_sentences_rpc')
+    except configparser.NoOptionError:
+        rhasspy_add_sentences_rpc = 'rhasspy_ctrl.add_sentences'
+    try:
+        rhasspy_delete_sentences_rpc = config.get('ui_manager',
+                                                  'delete_sentences_rpc')
+    except configparser.NoOptionError:
+        rhasspy_delete_sentences_rpc = 'rhasspy_ctrl.delete_sentences'
     ## ------------------------------------------------------------
     ## ------------------ Redis Parameters  -----------------------
     ## ------------------------------------------------------------
@@ -237,6 +267,8 @@ def load_cfg(cfg_file):
         redis_app_list_name = config.get('redis', 'app_list_name')
     except configparser.NoOptionError:
         redis_app_list_name = 'appmanager.apps'
+
+    print(local_uri_namespace)
 
     return {
         'core': {
@@ -278,21 +310,22 @@ def load_cfg(cfg_file):
             'password': redis_password,
             'app_list_name': redis_app_list_name,
         },
-        'monitoring_interfaces': {
+        'monitoring': {
             'heartbeat_interval': heartbeat_interval,
             'heartbeat_topic': heartbeat_topic,
             'connected_event': connected_event,
             'disconnected_event': disconnected_event,
         },
-        'app_interfaces': {
+        'applications': {
             'app_started_event': app_started_event,
             'app_stopped_event': app_stopped_event,
             'app_logs_topic': app_logs_topic,
             'app_stats_topic': app_stats_topic,
             'publish_app_logs': publish_app_logs,
-            'publish_app_stats': publish_app_stats
+            'publish_app_stats': publish_app_stats,
+            'app_ui_storage_dir': app_ui_storage_dir
         },
-        'control_interfaces': {
+        'control': {
             'app_delete_rpc_name': app_delete_rpc_name,
             'app_list_rpc_name': app_list_rpc_name,
             'get_running_apps_rpc_name': get_running_apps_rpc_name,
@@ -300,5 +333,13 @@ def load_cfg(cfg_file):
             'app_start_rpc_name': app_start_rpc_name,
             'app_stop_rpc_name': app_stop_rpc_name,
             'alive_rpc_name': alive_rpc_name
+        },
+        'rhasspy': {
+            'add_sentences_rpc': rhasspy_add_sentences_rpc,
+            'delete_sentences_rpc': rhasspy_delete_sentences_rpc
+        },
+        'ui_manager': {
+            'start_rpc': ui_start_rpc,
+            'stop_rpc': ui_stop_rpc
         }
     }

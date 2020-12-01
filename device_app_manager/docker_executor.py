@@ -44,14 +44,17 @@ class AppExecutorDocker(object):
     APP_STARTED_EVENT = 'thing.x.app.y.started'
     APP_STOPED_EVENT = 'thing.x.app.y.stopped'
 
-    def __init__(self, platform_params, redis_params,
-                 redis_app_list_name='appmanager.apps',
-                 app_started_event='thing.x.app.y.started',
-                 app_stopped_event='thing.x.app.y.stopped',
-                 app_logs_topic='thing.x.app.y.logs',
-                 app_stats_topic='thing.x.app.y.stats',
-                 publish_logs=True, publish_stats=False,
-                 sound_events=True):
+    def __init__(self,
+                 platform_params: dict,
+                 redis_params: dict,
+                 redis_app_list_name: str,
+                 app_started_event: str,
+                 app_stopped_event: str,
+                 app_logs_topic: str,
+                 app_stats_topic: str,
+                 publish_logs: bool = True,
+                 publish_stats: bool = False,
+                 sound_events: bool = True):
         """Constructor.
 
         Args:
@@ -85,11 +88,6 @@ class AppExecutorDocker(object):
         self._device_id = self.platform_params.credentials.username
         self.container_config = DockerContainerConfig()
         self._rparams = RedisParams(host='localhost')
-
-        self.custom_ui_rpc_client_start = RPCClient(
-            conn_params=self._rparams, rpc_name="device.ui.custom.start")
-        self.custom_ui_rpc_client_stop = RPCClient(
-            conn_params=self._rparams, rpc_name="device.ui.custom.stop")
 
         if self.sound_events:
             self._speak_action_name = \
@@ -151,15 +149,6 @@ class AppExecutorDocker(object):
                                   exit_capture_thread))
 
         self._on_app_started(app_name)
-
-    def _start_app_ui_component(self, app_name: str) -> None:
-        ui = self.redis.get_app(app_name)['ui']
-        if ui is not None:
-            self.log.info("Raising UI from the dead!")
-            res = self.custom_ui_rpc_client_start.call({"dir": ui + "/"})
-            self.log.info(f"Response from Custom UI: {res}")
-        else:
-            self.log.info("No UI for this app")
 
     def stop_app(self, app_name: str) -> None:
         """Stops application given its name
