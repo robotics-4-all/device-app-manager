@@ -318,7 +318,9 @@ All RPC Endpoints are binded to the `DEFAULT` exchange by default. Furthermore, 
 
 Returns the list of currently running applications.
 
-**URI**: `app_manager.apps.running`
+**Default Local URI**: `app_manager.apps.running`
+
+**Default Platform URI**: `thing.{DEVICE_ID}.app_manager.apps.running`
 
 **DataModel**:
   
@@ -357,7 +359,9 @@ where `app` has the following schema:
 
 Returns the list of installed applications.
 
-**URI**: `app_manager.apps`
+**Default Local URI**: `app_manager.apps`
+
+**Default Platform URI**: `thing.{DEVICE_ID}.app_manager.apps`
 
 **DataModel**:
   
@@ -397,7 +401,9 @@ Supported Applications are:
 - `py3`: Simple Python3 Application
 - `r4a_ros2_py`: R4A ROS2 Application
 
-**URI**: `app_manager.install_app`
+**Default Local URI**: `app_manager.install_app`
+
+**Default Platform URI**: `thing.{DEVICE_ID}.app_manager.install_app`
 
 **DataModel**:
 
@@ -423,7 +429,9 @@ Response
 
 Starts  a pre-installed application.
 
-**URI**: `app_manager.start_app`
+**Default Local URI**: `app_manager.start_app`
+
+**Default Platform URI**: `thing.{DEVICE_ID}.app_manager.start_app`
 
 **DataModel**:
 
@@ -455,7 +463,9 @@ Array of flags/values.
 
 Stops a running application.
 
-**URI**: `app_manager.stop_app`
+**Default Local URI**: `app_manager.stop_app`
+
+**Default Platform URI**: `thing.{DEVICE_ID}.app_manager.stop_app`
 
 **DataModel**:
 
@@ -482,7 +492,9 @@ Response
 
 Delete a pre-installed application.
 
-**URI**: `app_manager.delete_app`
+**Default Local URI**: `app_manager.delete_app`
+
+**Default Platform URI**: `thing.{DEVICE_ID}.app_manager.delete_app`
 
 **DataModel**:
 
@@ -513,7 +525,9 @@ Supported Applications are:
 - `py3`: Simple Python3 Application
 - `r4a_commlib`: R4A ROS2 Application
 
-**URI**: `app_manager.install_app`
+**Default Local URI**: `app_manager.install_app`
+
+**Default Platform URI**: `thing.{DEVICE_ID}.app_manager.install_app`
 
 **DataModel**:
 
@@ -543,10 +557,12 @@ application manager is running.
 
 Not really useful and not recommended. We recommend different
 ways for checking the state of the application manager, such as listening to the
-**heartbeat topic** -- `thimg.app_manager.heartbeat`. Using the AMQP protocol clients can
+**heartbeat topic**. Using the AMQP protocol clients can
 also check the state by validating existence of the various service queues.
 
-**URI**: `app_manager.is_alive`
+**Default Local URI**: `app_manager.is_alive`
+
+**Default Platform URI**: `thing.{DEVICE_ID}.app_manager.is_alive`
 
 **DataModel**:
 
@@ -568,16 +584,19 @@ These are Publishers pushing data to an AMQP message broker.
 All Publish Endpoints are binded to the `amq.topic` exchange by default.
 
 - Heartbeat Frames: Sends heartbeat frames periodically
-  - URI: `app_manager.heartbeat`
+  - **Default Local URI**: `app_manager.heartbeat`
+  - **Default Platform URI**: `thing.{DEVICE_ID}.app_manager.heartbeat`
   - DataModel: `{}`
 
 - Connected Event: Fires once when connected to the message broker
-  - URI: `app_manager.connected`
+  - **Default Local URI**: `app_manager.connected`
+  - **Default Platform URI**: `thing.{DEVICE_ID}.app_manager.connected`
   - DataModel: `{}`
 
 - Disconnected Event: Fires once when disconnected from the message broker
-  - URI: `app_manager.disconnected`
-  - DataModel: `{}`
+  - **Default Local URI**: `app_manager.disconnected`
+  - **Default Platform URI**: `thing.{DEVICE_ID}.app_manager.disconnected`
+  - **DataModel**: `{}`
 
 
 ## Per Application Endpoints
@@ -590,7 +609,9 @@ Each application deployment creates a series of endpoints.
 
 Sends application logs captured from stdout and stderr to a topic.
 
-**URI**: `app.{app_id}.logs`
+**Default Local URI**: `app_manager.app.{app_id}.logs`
+
+**Default Platform URI**: `thing.{DEVICE_ID}.app_manager.app.{app_id}.logs`
 
 **DataModel**:
 
@@ -605,7 +626,9 @@ Sends application logs captured from stdout and stderr to a topic.
 
 Sends runtime stats.
 
-**URI**: `app.{app_id}.stats`
+**Default Local URI**: `app_manager.app.{app_id}.stats`
+
+**Default Platform URI**: `thing.{DEVICE_ID}.app_manager.app.{app_id}.stats`
 
 **DataModel**:
 
@@ -619,7 +642,9 @@ Sends runtime stats.
 
 Fires once, on application launch.
 
-**URI**: `app.{app_id}.started`
+**Default Local URI**: `app_manager.app.{app_id}.started`
+
+**Default Platform URI**: `thing.{DEVICE_ID}.app_manager.app.{app_id}.started`
 
 **DataModel**: `{}`
 
@@ -628,7 +653,9 @@ Fires once, on application launch.
 
 Fires once, on application termination.
 
-**URI**: `app.{app_id}.stopped`
+**Default Local URI**: `app_manager.app.{app_id}.stopped`
+
+**Default Platform URI**: `thing.{DEVICE_ID}.app_manager.app.{app_id}.stopped`
 
 **DataModel**: `{}`
 
