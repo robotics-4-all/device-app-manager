@@ -34,7 +34,6 @@ class AppManager(object):
             Not the same as AMQP heartbeats. Device Manager sends
             heartbeat messages at a specific topic.
         debug (bool) Enable/Disable debug mode.
-        stop_apps_on_exit (bool): Currently not supported feature!
         keep_app_tarballls (bool):
         app_storage_dir (str):
         app_image_prefix (str):

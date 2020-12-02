@@ -230,15 +230,15 @@ def load_cfg(cfg_file):
     ## ------------------ Rhasspy Parameters ----------------------
     ## ------------------------------------------------------------
     try:
-        rhasspy_add_sentences_rpc = config.get('ui_manager',
+        rhasspy_add_sentences_rpc = config.get('rhasspy',
                                                'add_sentences_rpc')
     except configparser.NoOptionError:
-        rhasspy_add_sentences_rpc = 'rhasspy_ctrl.add_sentences'
+        rhasspy_add_sentences_rpc = 'rhasspy_manager.add_sentences'
     try:
-        rhasspy_delete_sentences_rpc = config.get('ui_manager',
-                                                  'delete_sentences_rpc')
+        rhasspy_delete_intent_rpc = config.get('rhasspy',
+                                               'delete_intent_rpc')
     except configparser.NoOptionError:
-        rhasspy_delete_sentences_rpc = 'rhasspy_ctrl.delete_sentences'
+        rhasspy_delete_intent_rpc = 'rhasspy_manager.delete_intent'
     ## -----------------------------------------------------------------
     ## ------------------ Audio-Events Parameters ----------------------
     ## ----------------------------------------------------------------
@@ -344,7 +344,7 @@ def load_cfg(cfg_file):
         },
         'rhasspy': {
             'add_sentences_rpc': rhasspy_add_sentences_rpc,
-            'delete_sentences_rpc': rhasspy_delete_sentences_rpc
+            'delete_intent_rpc': rhasspy_delete_intent_rpc
         },
         'ui_manager': {
             'start_rpc': ui_start_rpc,
