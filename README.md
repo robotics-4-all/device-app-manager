@@ -1,7 +1,7 @@
 # device-app-manager
 Component for remotely deploying Applications on Edge Devices.
 
-![AppManagerArchitecture](/assets/img/AppManager.png)
+![app_managerArchitecture](/assets/img/app_manager.png)
 
 - **Redis DB/Cache**: Uses redis to cache data and store application installations and deployments.
 - **Docker Container Engine**: Applications are deployed in docker containers. This is achieved by
@@ -207,7 +207,7 @@ host = localhost
 port = 6379
 database = 0
 password =
-app_list_name = appmanager.apps
+app_list_name = app_manager.apps
 ```
 
 #### Core Parameters
@@ -219,7 +219,7 @@ app_list_name = appmanager.apps
 - **stop_apps_on_exit**: Stop all applications before exiting  (DEPRECATED)
 - **keep_app_tarballs**: Keep Application Tarballs locally (DEPRECATED)
 - **app_storage_dir**: Directory to temporary store apps (DEPRECATED)
-- **uri_namespace**: Global Namespace to add on all interfaces (for AppManager only)
+- **uri_namespace**: Global Namespace to add on all interfaces (for app_manager only)
 - **device_id**: The ID of the device. Used to add device information on URIs, by using the {DEVICE_ID} in config
 
 #### Control Interfaces Parameters
@@ -241,8 +241,8 @@ app_list_name = appmanager.apps
 
 - **heartbeat_interval**:
 - **heartbeat_topic**: Topic to publish heartbeat messages
-- **connected_event_name**: AppManager-Connected Event Name
-- **disconnected_event_name**: AppManager-Disconnected Event Name
+- **connected_event_name**: app_manager-Connected Event Name
+- **disconnected_event_name**: app_manager-Disconnected Event Name
 
 #### Application Deployment Parameters
 
@@ -307,7 +307,8 @@ Examples are provided in the **examples** directory of this repository.
 
 We provide an example for each, provided by the application manager, interface.
 
-## Application Manager Platform Control Interfaces
+
+## AppManager Control Interfaces
 
 ### RPC Endpoints
 
@@ -317,7 +318,7 @@ All RPC Endpoints are binded to the `DEFAULT` exchange by default. Furthermore, 
 
 Returns the list of currently running applications.
 
-**URI**: `thing.{thing_id}.appmanager.apps.running`
+**URI**: `app_manager.apps.running`
 
 **DataModel**:
   
@@ -356,7 +357,7 @@ where `app` has the following schema:
 
 Returns the list of installed applications.
 
-**URI**: `thing.{thing_id}.appmanager.apps`
+**URI**: `app_manager.apps`
 
 **DataModel**:
   
@@ -396,7 +397,7 @@ Supported Applications are:
 - `py3`: Simple Python3 Application
 - `r4a_ros2_py`: R4A ROS2 Application
 
-**URI**: `thing.{thing_id}.appmanager.install_app`
+**URI**: `app_manager.install_app`
 
 **DataModel**:
 
@@ -422,7 +423,7 @@ Response
 
 Starts  a pre-installed application.
 
-**URI**: `thing.{thing_id}.appmanager.start_app`
+**URI**: `app_manager.start_app`
 
 **DataModel**:
 
@@ -454,7 +455,7 @@ Array of flags/values.
 
 Stops a running application.
 
-**URI**: `thing.{thing_id}.appmanager.stop_app`
+**URI**: `app_manager.stop_app`
 
 **DataModel**:
 
@@ -481,7 +482,7 @@ Response
 
 Delete a pre-installed application.
 
-**URI**: `thing.{thing_id}.appmanager.delete_app`
+**URI**: `app_manager.delete_app`
 
 **DataModel**:
 
@@ -504,6 +505,37 @@ Response
 
 `delete_app(app_id="test")`
 
+#### Fast-Deploy Application Service
+
+A service call will run application without storing it in local repository
+
+Supported Applications are:
+- `py3`: Simple Python3 Application
+- `r4a_commlib`: R4A ROS2 Application
+
+**URI**: `app_manager.install_app`
+
+**DataModel**:
+
+```json
+Request
+--------
+{
+  "app_id": "<application_unique_id>",
+  "app_type": "r4a_commlib",
+  "app_tarball": <BASE64_ENCODED_TARBALL>
+  "app_args": []
+}
+
+Response
+--------
+{
+  "status": <200/404>,
+  "app_id": <application_unique_id>,
+  "error": "<error_message>"
+}
+```
+
 #### Is Alive Service
 
 Only exists in case someone wants to call this service to see if the
@@ -514,7 +546,7 @@ ways for checking the state of the application manager, such as listening to the
 **heartbeat topic** -- `thimg.app_manager.heartbeat`. Using the AMQP protocol clients can
 also check the state by validating existence of the various service queues.
 
-**URI**: `thing.{thing_id}.appmanager.is_alive`
+**URI**: `app_manager.is_alive`
 
 **DataModel**:
 
@@ -528,7 +560,7 @@ Response
 {}
 ```
 
-### Platform Monitoring Interfaces
+### Monitoring Interfaces
 
 These outbound platform monitoring interfaces pushes information from the Edge to the Cloud.
 These are Publishers pushing data to an AMQP message broker.
@@ -536,15 +568,15 @@ These are Publishers pushing data to an AMQP message broker.
 All Publish Endpoints are binded to the `amq.topic` exchange by default.
 
 - Heartbeat Frames: Sends heartbeat frames periodically
-  - URI: `thing.{thing_id}.appmanager.heartbeat`
+  - URI: `app_manager.heartbeat`
   - DataModel: `{}`
 
 - Connected Event: Fires once when connected to the message broker
-  - URI: `thing.{thing_id}.appmanager.connected`
+  - URI: `app_manager.connected`
   - DataModel: `{}`
 
 - Disconnected Event: Fires once when disconnected from the message broker
-  - URI: `thing.{thing_id}.appmanager.disconnected`
+  - URI: `app_manager.disconnected`
   - DataModel: `{}`
 
 
@@ -558,7 +590,7 @@ Each application deployment creates a series of endpoints.
 
 Sends application logs captured from stdout and stderr to a topic.
 
-**URI**: `thing.{thing_id}.app.{app_id}.logs`
+**URI**: `app.{app_id}.logs`
 
 **DataModel**:
 
@@ -573,7 +605,7 @@ Sends application logs captured from stdout and stderr to a topic.
 
 Sends runtime stats.
 
-**URI**: `thing.{thing_id}.app.{app_id}.stats`
+**URI**: `app.{app_id}.stats`
 
 **DataModel**:
 
@@ -587,7 +619,7 @@ Sends runtime stats.
 
 Fires once, on application launch.
 
-**URI**: `thing.{thing_id}.app.{app_id}.started`
+**URI**: `app.{app_id}.started`
 
 **DataModel**: `{}`
 
@@ -596,7 +628,7 @@ Fires once, on application launch.
 
 Fires once, on application termination.
 
-**URI**: `thing.{thing_id}.app.{app_id}.stopped`
+**URI**: `app.{app_id}.stopped`
 
 **DataModel**: `{}`
 
