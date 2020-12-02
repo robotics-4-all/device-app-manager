@@ -21,9 +21,8 @@ Below is the list of features currently supported by the application manager:
 - **Install Application**: Nothing to explain here, the functionality is obvious.
 - **Start Application**: Start a previously installed application
 - **Stop Application**: Stop a currently running application
-- **Delete Application**: Delete an application. Does not terminate the currently running
-application instance. Use the **Stop Application** service in case you need such
-functionality.
+- **Delete Application**: Delete an application. Does not terminate the currently running application instance. Use the **Stop Application** service in case you need such functionality.
+- **FastDeploy Application**: Simple build-and-deploy service that does not store the application in local repository
 
 ## Supported Application Types
 
@@ -130,44 +129,78 @@ A sample configuration file can be found at this repo under the [examples](https
 
 ```ini
 [core]
-debug = 0
+debug = 1
 app_build_dir = /tmp/app-manager/apps/
 stop_apps_on_exit = 1
 keep_app_tarballs = 1
 app_storage_dir = ~/.apps/
+uri_namespace = app_manager
+device_id = device0
 
-[control_interfaces]
-app_install_rpc_name = thing.x.appmanager.install_app
-app_delete_rpc_name = thing.x.appmanager.delete_app
-app_list_rpc_name = thing.x.appmanager.apps
-get_running_apps_rpc_name = thing.x.appmanager.apps.running
-app_start_rpc_name = thing.x.appmanager.start_app
-app_stop_rpc_name = thing.x.appmanager.stop_app
-is_alive_rpc_name = thing.x.appmanager.is_alive
+[control]
+app_install_rpc_name = install_app
+app_delete_rpc_name = delete_app
+app_list_rpc_name = apps
+get_running_apps_rpc_name = apps.running
+app_start_rpc_name = start_app
+app_stop_rpc_name = stop_app
+is_alive_rpc_name = is_alive
+fast_deploy_rpc_name = fast_deploy
 
-[monitoring_interfaces]
+[monitoring]
 heartbeat_interval = 10
-heartbeat_topic = thing.x.appmanager.heartbeat
-connected_event_name = thing.x.appmanager.connected
-disconnected_event_name = thing.x.appmanager.disconnected
+heartbeat_topic = heartbeat
+connected_event_name = connected
+disconnected_event_name = disconnected
 
-[app_interfaces]
-app_started_event = thing.x.app.y.started
-app_stopped_event = thing.x.app.y.stopped
-app_logs_topic = thing.x.app.y.logs
-app_stats_topic = thing.x.app.y.stats
+[applications]
+app_started_event = app.{APP_ID}.started
+app_stopped_event = app.{APP_ID}.stopped
+app_logs_topic = app.{APP_ID}.logs
+app_stats_topic = app.{APP_ID}.stats
 publish_app_logs  = 1
 publish_app_stats = 1
+app_ui_storage_dir = ~/.config/device_app_manager
 
+[ui_manager]
+start_rpc = ui.custom.start
+stop_rpc = ui.custom.stop
 
-[broker]
-host = localhost
-port = 5672
+[rhasspy]
+add_sentences_rpc = rhasspy_ctrl.add_sentences
+delete_sentences_rpc = rhasspy_ctrl.delete_sentences
+
+[audio_events]
+enable = 1
+speak_action_uri = /robot/robot_1/actuator/audio/speaker/usb_speaker/d0/id_0/speak
+
+[platform_broker]
+uri_namespace = thing.{DEVICE_ID}
+logging = 0
+type = AMQP
+host = r4a-platform.ddns.net
+port = 5782
+; Vhost is used only in case of AMQP broker
 vhost = /
+; DB is used only in case of Redis broker
+db = 0
 rpc_exchange = DEFAULT
 topic_exchange = amq.topic
-username = device3
-password = device3
+username = device0
+password = device0
+
+[local_broker]
+uri_namespace =
+logging = 0
+type = REDIS
+host = localhost
+port = 6379
+; Vhost is used only in case of AMQP broker
+vhost = /
+; DB is used only in case of Redis broker
+db = 0
+; username = device3
+; password = device3
 
 [redis]
 host = localhost
@@ -176,6 +209,98 @@ database = 0
 password =
 app_list_name = appmanager.apps
 ```
+
+#### Core Parameters
+
+`Section: [core]`
+
+- **debug**: Enable/Disable debug mode
+- **app_build_dir**: Temp app directory. Used to extract and build apps.
+- **stop_apps_on_exit**: Stop all applications before exiting  (DEPRECATED)
+- **keep_app_tarballs**: Keep Application Tarballs locally (DEPRECATED)
+- **app_storage_dir**: Directory to temporary store apps (DEPRECATED)
+- **uri_namespace**: Global Namespace to add on all interfaces (for AppManager only)
+- **device_id**: The ID of the device. Used to add device information on URIs, by using the {DEVICE_ID} in config
+
+#### Control Interfaces Parameters
+
+`Section: [control]`
+
+- **app_install_rpc_name**:
+- **app_delete_rpc_name**:
+- **app_list_rpc_name**:
+- **get_running_apps_rpc_name**:
+- **app_start_rpc_name**:
+- **app_stop_rpc_name**:
+- **is_alive_rpc_name**:
+- **fast_deploy_rpc_name**:
+
+#### Monitoring Interfaces Parameters
+
+`Section: [monitoring]`
+
+- **heartbeat_interval**:
+- **heartbeat_topic**: Topic to publish heartbeat messages
+- **connected_event_name**: AppManager-Connected Event Name
+- **disconnected_event_name**: AppManager-Disconnected Event Name
+
+#### Application Deployment Parameters
+
+`Section: [applications]`
+
+- **app_started_event**:
+- **app_stopped_event**:
+- **app_logs_topic**:
+- **app_stats_topic**:
+- **app_ui_storage_dir**: Directory to store App UI components
+
+#### UI-Manager Parameters
+
+`Section: [ui_manager]`
+
+- **start_rpc**:
+- **stop_rpc**:
+
+#### Rhasspy Parameters
+
+`Section: [rhasspy]`
+
+- **add_sentences_rpc**:
+- **delete_intent_rpc**:
+
+#### Audio-Events Parameters
+
+`Section: [audio_events]`
+
+- **enable**: Enable/Disable Audio-Events for `on_app_started` and `on_app_stopped`
+- **speak_action_uri**:
+
+#### Platform Broker Parameters
+
+`Section: [platform_broker]`
+
+- **uri_namespace**: Prefix Namespace to add for all endpoints (Platform Connections)
+- **type**: Type of the Platform broker. Currently support `AMQP` and `REDIS`
+- **host**: Platform broker host
+- **port**: Platform broker port
+- **vhost**: Platform broker vhost. Only used if `type=AMQP`
+- **db**: Platform broker db. Only used if `type=REDIS`
+- **username**:
+- **password**:
+
+#### Local Broker Parameters
+
+`Section: [local_broker]`
+
+- **uri_namespace**: Prefix Namespace to add for all endpoints (Platform Connections)
+- **type**: Type of the Platform broker. Currently support `AMQP` and `REDIS`
+- **host**: Platform broker host
+- **port**: Platform broker port
+- **vhost**: Platform broker vhost. Only used if `type=AMQP`
+- **db**: Platform broker db. Only used if `type=REDIS`
+- **username**:
+- **password**:
+
 
 ### Examples
 Examples are provided in the **examples** directory of this repository.
