@@ -219,11 +219,11 @@ def load_cfg(cfg_file):
     ## --------------- UI-Manager Parameters ----------------------
     ## ------------------------------------------------------------
     try:
-        ui_start_rpc = config.get('ui_manager', 'start_rpc')
+        ui_start_rpc = config.get('custom_ui_handler', 'start_rpc')
     except configparser.NoOptionError:
         ui_start_rpc = 'ui.custom.start'
     try:
-        ui_stop_rpc = config.get('ui_manager', 'stop_rpc')
+        ui_stop_rpc = config.get('custom_ui_handler', 'stop_rpc')
     except configparser.NoOptionError:
         ui_stop_rpc = 'ui.custom.stop'
     ## ------------------------------------------------------------
@@ -346,7 +346,7 @@ def load_cfg(cfg_file):
             'add_sentences_rpc': rhasspy_add_sentences_rpc,
             'delete_intent_rpc': rhasspy_delete_intent_rpc
         },
-        'ui_manager': {
+        'custom_ui_handler': {
             'start_rpc': ui_start_rpc,
             'stop_rpc': ui_stop_rpc
         },

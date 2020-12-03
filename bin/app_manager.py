@@ -89,7 +89,7 @@ def main():
         config['applications'],
         config['control'],
         config['rhasspy'],
-        config['ui_manager'],
+        config['custom_ui_handler'],
         config['audio_events']
     )
     try:

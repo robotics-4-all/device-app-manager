@@ -50,7 +50,7 @@ class AppManager(object):
                  app_params,
                  control_params,
                  rhasspy_params,
-                 ui_manager_params,
+                 custom_ui_handler_params,
                  audio_events_params):
         atexit.register(self._cleanup)
 
@@ -62,7 +62,7 @@ class AppManager(object):
         self._app_params = app_params
         self._control_params = control_params
         self._rhasspy_params = rhasspy_params
-        self._ui_manager_params = ui_manager_params
+        self._custom_ui_handler_params = custom_ui_handler_params
         self._audio_events_params = audio_events_params
 
         self.debug = core_params['debug']
@@ -102,7 +102,7 @@ class AppManager(object):
         )
         self._clean_startup()
         self._init_rhassy_endpoints()
-        self._init_ui_manager_endpoints()
+        self._init_custom_ui_handler_endpoints()
 
     def _clean_startup(self):
         self.log.info('Prune stopped containers...')
@@ -290,7 +290,7 @@ class AppManager(object):
                 self._platform_broker_params['password']
             _btype = TransportType.AMQP
 
-        self._platform_node = Node('app_manager',
+        self._platform_node = Node(self.__class__.__name__,
                                    transport_type=_btype,
                                    transport_connection_params=conn_params,
                                    debug=self.debug)
@@ -731,13 +731,13 @@ class AppManager(object):
             res = self._ui_stop.call({}, timeout=1)
             self.log.info(f"Response from Custom UI: {res}")
 
-    def _init_ui_manager_endpoints(self):
-        rpc_name = self._ui_manager_params['start_rpc'].replace(
+    def _init_custom_ui_handler_endpoints(self):
+        rpc_name = self._custom_ui_handler_params['start_rpc'].replace(
             '{DEVICE_ID}', self._core_params['device_id'])
         self._ui_start = self._local_node.create_rpc_client(
             rpc_name=rpc_name,
             debug=self.debug)
-        rpc_name = self._ui_manager_params['stop_rpc'].replace(
+        rpc_name = self._custom_ui_handler_params['stop_rpc'].replace(
             '{DEVICE_ID}', self._core_params['device_id'])
         self._ui_stop = self._local_node.create_rpc_client(
             rpc_name=rpc_name,
