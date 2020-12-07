@@ -12,6 +12,7 @@ import threading
 import base64
 import atexit
 import json
+import shutil
 
 import redis
 import docker
@@ -103,6 +104,7 @@ class AppManager(object):
         self._clean_startup()
         self._init_rhassy_endpoints()
         self._init_custom_ui_handler_endpoints()
+        self._init_speak_client()
 
     def _clean_startup(self):
         self.log.info('Prune stopped containers...')
@@ -160,6 +162,7 @@ class AppManager(object):
         # Set rhassphy sentences for activating the application.
         ## Look here: https://github.com/robotics-4-all/sythes-voice-events-system
         if _app.voice_commands is not None:
+            self.log.info('Setting Rhasspy Sentences')
             resp = self._set_rhasspy_sentences(app_name, _app.voice_commands)
             self.log.info(resp)
 
@@ -189,8 +192,8 @@ class AppManager(object):
         _app = self.redis.get_app(app_name)
         if _app['ui'] is not None:
             try:
-                import shutil
-                target_dir = os.path.join(self.APP_UIS_DIR, app_name)
+                target_dir = os.path.join(
+                    self._app_params['app_ui_storage_dir'], app_name)
                 shutil.rmtree(target_dir)
             except Exception as e:
                 raise ValueError("App UI removal has gone wrong:" + str(e))
