@@ -200,6 +200,10 @@ class AppManager(object):
         self.redis.delete_app(app_name)
         ## Save db in hdd
         self.redis.save_db()
+        if _app['voice_commands'] is not None:
+            self.log.info(f'Deleting Rhasspy intent for app <{app_name}>')
+            resp = self._delete_rhasspy_intent(app_name)
+            self.log.info(resp)
 
     def start_app(self, app_name, app_args=[], auto_remove=False):
         """start_app.
@@ -236,7 +240,8 @@ class AppManager(object):
         self._send_app_stopped_event(app_id)
         self._stop_app_ui_component(app_id)
         if self._audio_events_params['enable']:
-            _text = f'Η εφαρμογή {app_id} τερμάτισε'
+            _text = f'Η εφαρμογή {app_id} τερμάτισε'.replace("_", " ").replace(
+                "-", " ")
             speak_goal_data = {
                 'text': _text,
                 'volume': 50,
@@ -469,6 +474,18 @@ class AppManager(object):
         self._rhasspy_add_sentences = self._local_node.create_rpc_client(
             rpc_name=rpc_name,
             debug=self.debug)
+        rpc_name = self._rhasspy_params['delete_intent_rpc'].replace(
+            '{DEVICE_ID}', self._core_params['device_id'])
+        self._rhasspy_delete_intent = self._local_node.create_rpc_client(
+            rpc_name=rpc_name,
+            debug=self.debug)
+
+    def _delete_rhasspy_intent(self, app_id):
+        req = {
+            'intent': app_id
+        }
+        resp = self._rhasspy_delete_intent.call(req)
+        return resp
 
     def _isalive_rpc_callback(self, msg, meta=None):
         self.log.debug('Call <is_alive> RPC')

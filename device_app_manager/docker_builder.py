@@ -107,7 +107,8 @@ class AppBuilderDocker(object):
 
             _app = AppModel(app_name, app_type, docker_image_name=image_name,
                             init_params=init_params, app_info=app_info,
-                            scheduler_params=scheduler_params, ui=target_dir)
+                            scheduler_params=scheduler_params, ui=target_dir,
+                            voice_command_params=voice_params)
         elif app_type == 'py3':
             _app = AppModel(app_name, app_type, docker_image_name=image_name)
         elif app_type == 'nodered':
