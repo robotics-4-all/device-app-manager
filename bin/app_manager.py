@@ -64,15 +64,15 @@ def main():
     ## Parameters passed from CLI are getting priority and override
     ## those defined in the configuration file
     if username is not None:
-        config['username'] = username
+        config['platform_broker']['username'] = username
     if password is not None:
-        config['password'] = password
+        config['platform_broker']['password'] = password
     if host is not None:
-        config['host'] = host
+        config['platform_broker']['host'] = host
     if port is not None:
-        config['port'] = port
+        config['platform_broker']['port'] = port
     if vhost is not None:
-        config['vhost'] = vhost
+        config['platform_broker']['vhost'] = vhost
     if heartbeat is not None:
         config['heartbeat_interval'] = heartbeat
 
@@ -81,37 +81,16 @@ def main():
     print('==================================================================')
 
     manager = AppManager(
-        platform_creds=(config['username'], config['password']),
-        platform_host=config['host'],
-        platform_port=config['port'],
-        platform_vhost=config['vhost'],
-        heartbeat_interval=config['heartbeat_interval'],
-        heartbeat_topic=config['heartbeat_topic'],
-        app_list_rpc_name=config['app_list_rpc_name'],
-        app_delete_rpc_name=config['app_delete_rpc_name'],
-        app_install_rpc_name=config['app_install_rpc_name'],
-        app_start_rpc_name=config['app_start_rpc_name'],
-        app_stop_rpc_name=config['app_stop_rpc_name'],
-        alive_rpc_name=config['alive_rpc_name'],
-        get_running_apps_rpc_name=config['get_running_apps_rpc_name'],
-        connected_event=config['connected_event'],
-        disconnected_event=config['disconnected_event'],
-        redis_host=config['redis_host'],
-        redis_port=config['redis_port'],
-        redis_db=config['redis_db'],
-        redis_password=config['redis_password'],
-        redis_app_list_name=config['redis_app_list_name'],
-        debug=config['debug'],
-        app_build_dir=config['app_build_dir'],
-        app_image_prefix=config['app_image_prefix'],
-        keep_app_tarballls=config['keep_app_tarballls'],
-        app_storage_dir=config['app_storage_dir'],
-        app_started_event=config['app_started_event'],
-        app_stopped_event=config['app_stopped_event'],
-        app_logs_topic=config['app_logs_topic'],
-        app_stats_topic=config['app_stats_topic'],
-        publish_app_logs=config['publish_app_logs'],
-        publish_app_stats=config['publish_app_logs']
+        config['platform_broker'],
+        config['local_broker'],
+        config['redis'],
+        config['core'],
+        config['monitoring'],
+        config['applications'],
+        config['control'],
+        config['rhasspy'],
+        config['custom_ui_handler'],
+        config['audio_events']
     )
     try:
         manager.run()

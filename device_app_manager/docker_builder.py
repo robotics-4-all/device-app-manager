@@ -17,11 +17,6 @@ from ._logging import create_logger
 from .redis_controller import RedisController
 from .app_model import AppModel
 
-from commlib.transports.amqp import (
-    Publisher, RPCService
-)
-
-
 DOCKERFILE_TPL_MAP = {
     'py3': 'Dockerfile.py3.tpl',
     'r4a_commlib': 'Dockerfile.r4a_commlib.tpl',
@@ -39,6 +34,7 @@ class AppBuilderDocker(object):
     APP_INIT_FILE_NAME = 'init.conf'
     APP_INFO_FILE_NAME = 'app.info'
     SCHEDULER_FILE_NAME = 'exec.conf'
+    VOICE_COMMANDS_FILE_NAME = 'voice-commands.txt'
     APP_UIS_DIR = "/home/pi/.config/device_app_manager/"
 
     def __init__(self, image_prefix='app', build_dir='/tmp/app-manager/apps/'):
@@ -62,21 +58,22 @@ class AppBuilderDocker(object):
         app_dir = self._prepare_build(
             app_name, app_type, app_tarball_path)
 
-        # Fix this better
         # Check if folder ui in app_dir
+        # ------------------------------------------------------------->
         target_dir = None
         if os.path.isdir(os.path.join(app_dir, "app", "ui")):
-            self.log.info(f'App <{app_name}> has ui dir!')
+            self.logger.info(f'App <{app_name}> has ui dir!')
             source_dir = os.path.join(app_dir, "app", "ui")
             target_dir = os.path.join(self.APP_UIS_DIR, app_name)
             # Delete old folder if exists
             try:
                 shutil.rmtree(target_dir)
             except:
-                self.log.info("No previous ui dir existed")
+                self.logger.info("No previous ui dir existed")
             shutil.copytree(source_dir, target_dir)
         else:
-            self.log.info(f'App <{app_name}> has no ui dir')
+            self.logger.info(f'App <{app_name}> has no ui dir')
+        # <------------------------------------------------------------
 
         if app_type == 'r4a_commlib':
             if not os.path.isfile(os.path.join(app_dir, 'app',
@@ -86,24 +83,32 @@ class AppBuilderDocker(object):
                 init_params = self._read_init_params(
                     os.path.join(app_dir, 'app', self.APP_INIT_FILE_NAME))
             except Exception:
-                self.log.warn('Missing init.conf file!')
+                self.logger.warn('Missing init.conf file!')
                 init_params = {}
             try:
                 app_info = self._read_app_info(
                     os.path.join(app_dir, 'app', self.APP_INFO_FILE_NAME))
             except Exception as exc:
-                self.log.error('Could not properly read app.info file!')
+                self.logger.error('Could not properly read app.info file!',
+                                  exc_info=True)
                 raise ApplicationError('File app.info seems malformed!')
             try:
                 scheduler_params = self._read_scheduler_params(
                     os.path.join(app_dir, 'app', self.SCHEDULER_FILE_NAME))
             except Exception:
-                self.log.warn('Missing exec.conf file!')
+                self.logger.warn('Missing <exec.conf> file!')
                 scheduler_params = {}
+            try:
+                voice_params = self._read_voice_activation_params(
+                    os.path.join(app_dir, 'app', self.VOICE_COMMANDS_FILE_NAME))
+            except Exception:
+                self.logger.warn('Missing <voice-commands.txt> file!')
+                voice_params = {}
 
             _app = AppModel(app_name, app_type, docker_image_name=image_name,
                             init_params=init_params, app_info=app_info,
-                            scheduler_params=scheduler_params, ui=target_dir)
+                            scheduler_params=scheduler_params, ui=target_dir,
+                            voice_command_params=voice_params)
         elif app_type == 'py3':
             _app = AppModel(app_name, app_type, docker_image_name=image_name)
         elif app_type == 'nodered':
@@ -115,16 +120,17 @@ class AppBuilderDocker(object):
 
         try:
             shutil.rmtree(app_dir)
-        except:
-            pass
+        except Exception as exc:
+            self.logger.error('Failed to remove decompressed application dir',
+                              exc_info=True)
         return _app
 
     def __init_logger(self):
         """Initialize logger."""
-        self.log = create_logger(self.__class__.__name__)
+        self.logger = create_logger(self.__class__.__name__)
 
     def _build_image(self, app_dir, image_name):
-        self.log.debug('[*] - Building image {} ...'.format(image_name))
+        self.logger.debug('[*] - Building image {} ...'.format(image_name))
         try:
             image, logs = self.docker_client.images.build(
                 path=app_dir,
@@ -133,13 +139,13 @@ class AppBuilderDocker(object):
                 forcerm=True
             )
             for l in logs:
-                self.log.debug(l)
+                self.logger.debug(l)
         except docker.errors.BuildError as e:
-            self.log.error('Build for application <{}> failed!'.format(
+            self.logger.error('Build for application <{}> failed!'.format(
                 image_name))
             for line in e.build_log:
                 if 'stream' in line:
-                    self.log.error(line['stream'].strip())
+                    self.logger.error(line['stream'].strip())
             raise e
 
     def _prepare_build(self, app_name, app_type, app_tarball_path=None):
@@ -159,14 +165,8 @@ class AppBuilderDocker(object):
         ##  - app/
         ##  - Dockerfile
         dockerfile_path = os.path.join(app_tmp_dir, 'Dockerfile')
-
         self._untar_app(app_tarball_path, app_src_dir)
-
         self._create_dockerfile(app_type, self.APP_SRC_DIR, dockerfile_path)
-
-        ## Dirty Solution!!
-        # if app_type == 'r4a_ros2_py':
-
         return app_tmp_dir
 
     def _read_yaml_file(self, fpath):
@@ -183,6 +183,11 @@ class AppBuilderDocker(object):
     def _read_scheduler_params(self, fpath):
         return self._read_yaml_file(fpath)
 
+    def _read_voice_activation_params(self, fpath):
+        with open(fpath, 'r') as fstream:
+            sentences = [line.rstrip() for line in fstream]
+            return sentences
+
     def _create_dockerfile(self, app_type, app_src_dir, dest_path):
         _tpl = self._dockerfile_templates[app_type]
         dockerfile = _tpl.render(
@@ -193,7 +198,7 @@ class AppBuilderDocker(object):
             fp.write(dockerfile)
 
     def _untar_app(self, tarball_path, dest_path):
-        self.log.debug(
+        self.logger.debug(
             '[*] - Decompressing application tarball <{}> ...'.format(
                 tarball_path)
         )
@@ -210,11 +215,7 @@ class AppBuilderDocker(object):
         for key in DOCKERFILE_TPL_MAP:
             _tplpath = os.path.join(_templates_dir,DOCKERFILE_TPL_MAP[key])
             if os.path.isfile(_tplpath):
-                self.log.info(
-                    'Loading Application Template for type {}'.format(key))
+                self.logger.info(f'Loading Application Template for type {key}')
                 # self.dockerfile_templates['key'] = Template(_tplpath)
                 _tpl = self._jinja_env.get_template(DOCKERFILE_TPL_MAP[key])
                 self._dockerfile_templates[key] = _tpl
-
-
-

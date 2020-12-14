@@ -1,0 +1,4 @@
+version: 1.0.0
+elsa_version: 1.0.0
+tags: ["testing"]
+description: A simple conversational app
