@@ -391,7 +391,7 @@ class AppManager(object):
                 self._local_broker_params['password']
             _btype = TransportType.AMQP
 
-        self._local_node = Node('app_manager',
+        self._local_node = Node('AppManager',
                                 transport_type=_btype,
                                 transport_connection_params=conn_params,
                                 debug=self.debug)
@@ -687,32 +687,38 @@ class AppManager(object):
 
     def _send_connected_event(self):
         _uri = f'{self._monitoring_params["connected_event"]}'
-        _uri = self.__add_local_ns(_uri)
-        event = Event('AppManager-Connected', _uri)
+        _luri = self.__add_local_ns(_uri)
+        event = Event('AppManager-Connected', _luri)
         self._local_event_emitter.send_event(event)
+        _puri = self.__add_platform_ns(_uri)
+        event = Event('AppManager-Connected', _puri)
         self._platform_event_emitter.send_event(event)
 
     def _send_disconnected_event(self):
         _uri = f'{self._monitoring_params["disconnected_event"]}'
-        _uri = self.__add_local_ns(_uri)
-        event = Event('AppManager-Disconnected', _uri)
+        _luri = self.__add_local_ns(_uri)
+        _puri = self.__add_platform_ns(_uri)
+        event = Event('AppManager-Disconnected', _luri)
         self._local_event_emitter.send_event(event)
+        event = Event('AppManager-Disconnected', _puri)
         self._platform_event_emitter.send_event(event)
 
     def _send_app_started_event(self, app_id):
         _uri = f'{self._app_params["app_started_event"]}'
-        _uri = self.__add_local_ns(_uri)
-        _uri = _uri.replace('{APP_ID}', app_id)
-        event = Event('Application-Started', _uri)
+        _luri = self.__add_local_ns(_uri).replace('{APP_ID}', app_id)
+        _puri = self.__add_platform_ns(_uri).replace('{APP_ID}', app_id)
+        event = Event('Application-Started', _luri)
         self._local_event_emitter.send_event(event)
+        event = Event('Application-Started', _puri)
         self._platform_event_emitter.send_event(event)
 
     def _send_app_stopped_event(self, app_id):
         _uri = f'{self._app_params["app_stopped_event"]}'
-        _uri = self.__add_local_ns(_uri)
-        _uri = _uri.replace('{APP_ID}', app_id)
-        event = Event('Application-Stopped', _uri)
+        _luri = self.__add_local_ns(_uri).replace('{APP_ID}', app_id)
+        _puri = self.__add_platform_ns(_uri).replace('{APP_ID}', app_id)
+        event = Event('Application-Stopped', _luri)
         self._local_event_emitter.send_event(event)
+        event = Event('Application-Stopped', _puri)
         self._platform_event_emitter.send_event(event)
 
     def _store_app_tar(self, tar_b64, dest_dir):
