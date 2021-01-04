@@ -26,7 +26,7 @@ if __name__ == "__main__":
         type=str, default='')
     parser.add_argument(
         '--rpc-name', dest='rpc_name', help='The URI of the RPC endpoint',
-        type=str, default='thing.{}.appmanager.start_app')
+        type=str, default='thing.{}.app_manager.start_app')
     parser.add_argument(
         '--host',
         dest='host',
