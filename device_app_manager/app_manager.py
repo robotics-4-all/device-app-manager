@@ -152,11 +152,11 @@ class AppManager(object):
 
         if self.redis.app_exists(app_name):
             ## Updating app
-            self.log.info('Updating App in DB: <{}>'.format(app_name))
+            self.log.info(f'Updating App in DB: <{app_name}>')
             self.redis.update_app(_app.serialize())
         else:
             ## Creating new app instance in db
-            self.log.info('Storing new App in DB: <{}>'.format(app_name))
+            self.log.info(f'Storing new App in DB: <{app_name}>')
             self.redis.add_app(_app.serialize())
 
         # Set rhassphy sentences for activating the application.
@@ -178,13 +178,13 @@ class AppManager(object):
             force_stop (bool): Force stop application container
         """
         if not self.redis.app_exists(app_name):
-            raise ValueError('App <{}> does not exist locally'.format(app_name))
+            raise ValueError(f'App <{app_name}> does not exist locally')
 
         if self.redis.app_is_running(app_name) and force_stop:
             self.log.info('Stoping App before deleting')
             self.stop_app(app_name)
 
-        self.log.info('Deleting Application <{}>'.format(app_name))
+        self.log.info(f'Deleting Application <{app_name}>')
         docker_app_image = self.redis.get_app_image(app_name)
         self.docker_client.images.remove(image=docker_app_image, force=True)
 
@@ -196,14 +196,20 @@ class AppManager(object):
                     self._app_params['app_ui_storage_dir'], app_name)
                 shutil.rmtree(target_dir)
             except Exception as e:
-                raise ValueError("App UI removal has gone wrong:" + str(e))
+                raise ValueError(f"App UI removal has gone wrong: {e}")
         self.redis.delete_app(app_name)
         ## Save db in hdd
         self.redis.save_db()
-        if _app['voice_commands'] is not None:
-            self.log.info(f'Deleting Rhasspy intent for app <{app_name}>')
-            resp = self._delete_rhasspy_intent(app_name)
-            self.log.info(resp)
+        try:
+            if _app['voice_commands'] is not None:
+                self.log.info(f'Deleting Rhasspy intent for app <{app_name}>')
+                resp = self._delete_rhasspy_intent(app_name)
+                self.log.info(resp)
+        except Exception:
+            self.log.warn(
+                f'Failed to delete voice_commands for app {app_name}',
+                exc_info=True
+            )
 
     def start_app(self, app_name, app_args=[], auto_remove=False):
         """start_app.
@@ -215,7 +221,7 @@ class AppManager(object):
                 of the current execution. Used for testing applications.
         """
         if not self.redis.app_exists(app_name):
-            raise ValueError('App <{}> does not exist locally'.format(app_name))
+            raise ValueError(f'App <{app_name}> does not exist locally')
 
         app = self.redis.get_app(app_name)
 
@@ -254,9 +260,9 @@ class AppManager(object):
 
     def stop_app(self, app_name):
         if not self.redis.app_exists(app_name):
-            raise ValueError('App <{}> does not exist locally'.format(app_name))
+            raise ValueError(f'App <{app_name}> does not exist locally')
         self.app_executor.stop_app(app_name)
-        self.log.info('App {} stopped!'.format(app_name))
+        self.log.info(f'App <{app_name}> stopped!')
 
     def get_apps(self):
         return self.redis.get_apps()
