@@ -1,10 +1,20 @@
+from typing import Dict
+
+
 class AppModel(object):
 
-    def __init__(self, name=None, app_type=None, state=0,
-                 docker_image_name=None, docker_container_id=None,
-                 docker_container_name=None, app_info=None,
-                 init_params=None, scheduler_params=None, ui=None,
-                 voice_command_params=None):
+    def __init__(self,
+                 name: str = None,
+                 app_type: str = None,
+                 state: int = 0,
+                 docker_image_name: str = None,
+                 docker_container_id: str = None,
+                 docker_container_name: str = None,
+                 app_info: Dict = None,
+                 init_params: Dict = None,
+                 scheduler_params: Dict = None,
+                 ui: Dict = None,
+                 voice_command_params: Dict = None):
         self.name = name
         self.app_type = app_type
         self.state = state
