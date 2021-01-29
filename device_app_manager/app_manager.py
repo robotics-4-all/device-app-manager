@@ -184,9 +184,12 @@ class AppManager(object):
             self.log.info('Stoping App before deleting')
             self.stop_app(app_name)
 
-        self.log.info(f'Deleting Application <{app_name}>')
-        docker_app_image = self.redis.get_app_image(app_name)
-        self.docker_client.images.remove(image=docker_app_image, force=True)
+        self.log.info(f'Deleting Docker Image <{app_name}>')
+        try:
+            docker_app_image = self.redis.get_app_image(app_name)
+            self.docker_client.images.remove(image=docker_app_image, force=True)
+        except Exception as e:
+            self.log.error(e, exc_info=True)
 
         # Check if app has ui and remove it
         _app = self.redis.get_app(app_name)
