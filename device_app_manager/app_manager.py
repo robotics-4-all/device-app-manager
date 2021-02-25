@@ -196,14 +196,9 @@ class AppManager(object):
         # Check if app has ui and remove it
         try:
             if _app['ui'] is not None:
-                try:
-                    target_dir = os.path.join(
-                        self._app_params['app_ui_storage_dir'], app_name)
-                    shutil.rmtree(target_dir)
-                except Exception as e:
-                    raise ValueError(f"App UI removal has gone wrong: {e}")
-            self.redis.delete_app(app_name)
-            self.redis.save_db()
+                target_dir = os.path.join(
+                    self._app_params['app_ui_storage_dir'], app_name)
+                shutil.rmtree(target_dir)
         except Exception as e:
             self.log.warn(
                 f'Error while trying to remove UI component for app {app_name}',
@@ -219,6 +214,14 @@ class AppManager(object):
                 f'Failed to delete voice_commands for app {app_name}',
                 exc_info=True
             )
+        try:
+            self.redis.delete_app(app_name)
+        except Exception:
+            self.log.warn(
+                f'Failed to remove app entry ({app_name}) from local DB.',
+                exc_info=True
+            )
+        self.redis.save_db()
 
     def start_app(self, app_name, app_args=[], auto_remove=False):
         """start_app.
