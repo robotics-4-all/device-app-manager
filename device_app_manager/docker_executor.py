@@ -219,7 +219,6 @@ class AppExecutorDocker(object):
         try:
             for line in container.logs(stream=True):
                 _log_msg = line.strip().decode('utf-8')
-                self.log.debug(_log_msg)
                 msg = {
                     'timestamp': 0,
                     'log_msg': _log_msg

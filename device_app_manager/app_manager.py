@@ -117,11 +117,10 @@ class AppManager(object):
             _cid = self.redis.get_app_container(app_name)
             if app_state == 1:
                 try:
-                    self.log.info('Found zombie container! Removing...')
+                    self.log.info(f'Found zombie app! Removing {app_name}...')
                     _c = self.docker_client.containers.get(_cid)
                     _c.stop()
                     _c.remove(force=True)
-                    self.log.info('Zombie container removed!')
                 except docker.errors.NotFound as exc:
                     self.log.error(exc, exc_info=True)
                 except Exception as exc:
@@ -162,9 +161,8 @@ class AppManager(object):
         # Set rhassphy sentences for activating the application.
         ## Look here: https://github.com/robotics-4-all/sythes-voice-events-system
         if _app.voice_commands is not None:
-            self.log.info('Setting Rhasspy Sentences')
+            self.log.info('Setting Rhasspy Sentences...')
             resp = self._set_rhasspy_sentences(app_name, _app.voice_commands)
-            self.log.info(resp)
 
         self.redis.save_db()
         return app_name
@@ -181,10 +179,10 @@ class AppManager(object):
             raise ValueError(f'App <{app_name}> does not exist locally')
 
         if self.redis.app_is_running(app_name) and force_stop:
-            self.log.info('Stoping App before deleting')
+            self.log.info(f'Stopping App <{app_name}> before deleting...')
             self.stop_app(app_name)
 
-        self.log.info(f'Deleting Docker Image <{app_name}>')
+        self.log.info(f'Deleting docker image for app <{app_name}>...')
         try:
             docker_app_image = self.redis.get_app_image(app_name)
             self.docker_client.images.remove(image=docker_app_image, force=True)
@@ -202,24 +200,23 @@ class AppManager(object):
         except Exception as e:
             self.log.warn(
                 f'Error while trying to remove UI component for app {app_name}',
-                exc_info=True
+                exc_info=False
             )
         try:
             if _app['voice_commands'] is not None:
                 self.log.info(f'Deleting Rhasspy intent for app <{app_name}>')
                 resp = self._delete_rhasspy_intent(app_name)
-                self.log.info(resp)
         except Exception:
             self.log.warn(
                 f'Failed to delete voice_commands for app {app_name}',
-                exc_info=True
+                exc_info=False
             )
         try:
             self.redis.delete_app(app_name)
         except Exception:
             self.log.warn(
                 f'Failed to remove app entry ({app_name}) from local DB.',
-                exc_info=True
+                exc_info=False
             )
         self.redis.save_db()
 
@@ -257,18 +254,6 @@ class AppManager(object):
     def _on_app_stopped(self, app_id: str):
         self._send_app_stopped_event(app_id)
         self._stop_app_ui_component(app_id)
-        if self._audio_events_params['enable']:
-            _text = f'Η εφαρμογή {app_id} τερμάτισε'.replace("_", " ").replace(
-                "-", " ")
-            speak_goal_data = {
-                'text': _text,
-                'volume': 50,
-                'language': 'el'
-            }
-            try:
-                self._speak_action.send_goal(speak_goal_data, timeout=1)
-            except Exception as exc:
-                self.log.error(exc)
 
     def stop_app(self, app_name):
         if not self.redis.app_exists(app_name):
@@ -506,14 +491,14 @@ class AppManager(object):
         return resp
 
     def _isalive_rpc_callback(self, msg, meta=None):
-        self.log.debug('Call <is_alive> RPC')
+        self.log.debug('RPC Request: is_alive')
         return {
             'status': 200
         }
 
     def _install_app_rpc_callback(self, msg, meta=None):
         try:
-            self.log.debug('Call <install-app> RPC')
+            self.log.debug('RPC Request: install_app')
             if 'app_id' not in msg:
                 raise ValueError('Message does not include app_id property')
             if msg['app_id'] == '':
@@ -539,7 +524,8 @@ class AppManager(object):
                 'error': ''
             }
         except Exception as e:
-            self.log.error(e, exc_info=True)
+            self.log.error(f'Error while installing application {app_id}',
+                           exc_info=True)
             return {
                 'status': 404,
                 'app_id': '',
@@ -548,7 +534,7 @@ class AppManager(object):
 
     def _delete_app_rpc_callback(self, msg, meta=None):
         try:
-            self.log.debug('Call <delete-app> RPC')
+            self.log.debug('RPC Request: delete_app')
             if 'app_id' not in msg:
                 raise ValueError('Message schema error. app_id is not defined')
             if msg['app_id'] == '':
@@ -566,7 +552,8 @@ class AppManager(object):
                 'error': ''
             }
         except Exception as e:
-            self.log.error(e, exc_info=True)
+            self.log.error(f'Error while deleting app {app_name}',
+                           exc_info=True)
             return {
                 'status': 404,
                 'error': str(e)
@@ -578,7 +565,7 @@ class AppManager(object):
             'error': ''
         }
         try:
-            self.log.debug('Call <start-app> RPC')
+            self.log.debug('RPC Request: start_app')
             if 'app_id' not in msg:
                 raise ValueError('Message does not include app_id property')
             if msg['app_id'] == '':
@@ -592,7 +579,8 @@ class AppManager(object):
 
             app_id = self.start_app(app_name, app_args)
         except Exception as e:
-            self.log.error(e, exc_info=True)
+            self.log.error(f'Error while deploying application {app_name}' +
+                           ' container', exc_info=False)
             resp['status'] = 404
             resp['error'] = str(e)
         finally:
@@ -604,7 +592,7 @@ class AppManager(object):
             'error': ''
         }
         try:
-            self.log.debug('Call <stop-app> RPC')
+            self.log.debug('RPC Request: stop_app')
             if not 'app_id' in msg:
                 raise ValueError('Message schema error. app_id is not defined')
             if msg['app_id'] == '':
@@ -618,7 +606,8 @@ class AppManager(object):
 
             self.stop_app(app_name)
         except Exception as e:
-            self.log.error(e, exc_info=True)
+            self.log.error(f'Error while trying to stop app {app_name}',
+                           exc_info=True)
             resp['status'] = 404
             resp['error'] = str(e)
         finally:
@@ -631,7 +620,7 @@ class AppManager(object):
             'app_id': ''
         }
         try:
-            self.log.debug('Call <fast-deploy> RPC')
+            self.log.debug('RPC Request: fast_deploy')
             if not 'app_id' in msg:
                 raise ValueError('Message schema error. app_id is not defined')
             if msg['app_id'] == '':
@@ -789,7 +778,7 @@ class AppManager(object):
 
     def _init_speak_client(self):
         self._speak_action = self._local_node.create_action_client(
-            action_name=self._audio_events_params['speak_action_uri']
+            action_uri=self._audio_events_params['speak_action_uri']
         )
 
     def __add_local_ns(self, uri: str):
