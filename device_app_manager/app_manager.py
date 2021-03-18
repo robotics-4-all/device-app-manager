@@ -68,9 +68,6 @@ class AppManager(object):
 
         self.debug = core_params['debug']
 
-        self._init_platform_node()
-        self._init_local_node()
-
         self.log = Logger('AppManager', debug=True)
 
         redis_params = RedisConnectionParams(
@@ -102,6 +99,10 @@ class AppManager(object):
             on_app_stopped=self._on_app_stopped
         )
         self._clean_startup()
+
+        self._init_local_node()
+        self._init_platform_node()
+
         self._init_rhassy_endpoints()
         self._init_custom_ui_handler_endpoints()
         self._init_speak_client()
