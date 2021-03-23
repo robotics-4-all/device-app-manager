@@ -779,7 +779,7 @@ class AppManager(object):
 
     def _init_speak_client(self):
         self._speak_action = self._local_node.create_action_client(
-            action_uri=self._audio_events_params['speak_action_uri']
+            action_name=self._audio_events_params['speak_action_uri']
         )
 
     def __add_local_ns(self, uri: str):
