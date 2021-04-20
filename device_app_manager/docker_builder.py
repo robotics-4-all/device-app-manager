@@ -61,6 +61,7 @@ class AppBuilderDocker(object):
         # Check if folder ui in app_dir
         # ------------------------------------------------------------->
         target_dir = None
+        self.logger.info('Setup UI component...')
         if os.path.isdir(os.path.join(app_dir, "app", "ui")):
             self.logger.info(f'App <{app_name}> has ui dir!')
             source_dir = os.path.join(app_dir, "app", "ui")
@@ -73,9 +74,11 @@ class AppBuilderDocker(object):
             shutil.copytree(source_dir, target_dir)
         else:
             self.logger.info(f'App <{app_name}> has no ui dir')
+        self.logger.info('Setup UI finished')
         # <------------------------------------------------------------
 
         if app_type == 'r4a_commlib':
+            self.logger.info('R4A APP using commlib!')
             if not os.path.isfile(os.path.join(app_dir, 'app',
                                                self.APP_INFO_FILE_NAME)):
                 raise ApplicationError('Missing app.info file')
@@ -189,11 +192,13 @@ class AppBuilderDocker(object):
             return sentences
 
     def _create_dockerfile(self, app_type, app_src_dir, dest_path):
+        self.logger.debug(f'Constructing Dockerfile from template for app_type <{app_type}>...')
         _tpl = self._dockerfile_templates[app_type]
         dockerfile = _tpl.render(
             app_src_dir=app_src_dir,
             app_dest_dir=self.APP_DEST_DIR
             )
+        self.logger.debug('Dockerfile rendered')
         with open(dest_path, 'w') as fp:
             fp.write(dockerfile)
 
@@ -210,6 +215,7 @@ class AppBuilderDocker(object):
             raise ValueError('Not a tarball')
 
     def _load_app_templates(self):
+        self.logger.info('Searching for Application Dockerfile templates to load...')
         _current_dir = os.path.dirname(os.path.abspath(__file__))
         _templates_dir = os.path.join(_current_dir, 'templates')
         for key in DOCKERFILE_TPL_MAP:
@@ -219,3 +225,5 @@ class AppBuilderDocker(object):
                 # self.dockerfile_templates['key'] = Template(_tplpath)
                 _tpl = self._jinja_env.get_template(DOCKERFILE_TPL_MAP[key])
                 self._dockerfile_templates[key] = _tpl
+            else:
+                self.logger.error(f'Dockerfile Template for [{key}] not found ({_tplpath})')
