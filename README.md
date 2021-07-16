@@ -90,6 +90,17 @@ retry: <bool>
 max_retries: <int>
 ```
 
+### NodeRED Application
+
+Tarball contents:
+
+- `flows.json`: NodeRED application as exported from the IDE in json format
+- `package.json`: Includes nodered app (nodered package) information, such as
+dependencies. Look [here](https://nodered.org/docs/creating-nodes/packaging) for
+more information
+- `settings.json`: NodeRED instance settings. Look [here](https://nodered.org/docs/user-guide/runtime/settings-file) for more information.
+
+**Keyword**: `nodered`
 
 ## Usage
 
