@@ -16,26 +16,5 @@ def read(fname):
 
 
 setup(
-    install_requires=read('requirements.txt').splitlines(),
-    name='device_app_manager',
-    version='0.1.1',
-    description='Remotely deploy applications on devices',
-    download_url='',
-    author='Konstantinos Panayiotou',
-    author_email='klpanagi@gmail.com',
-    maintainer='Konstantinos Panayiotou',
-    maintainer_email='klpanagi@gmail.com',
-    license='Apache 2',
-    test_suite='tests',
-    include_package_data=True,
-    # A list naming all the packages you want to include
-    packages=find_packages(),
-    # Package data to be added to packages
-    package_data={},
-    # Specify additional files needed by the module distribution:
-    #  configuration files, message catalogs, data files
-    data_files=[],
-    # Script(s) to be installed into standard locations like /usr/bin
-    scripts=[],
-    zip_safe=True,
-    long_description=read('README.md') if os.path.exists('README.md') else "")
+    package_data={'': ['*.tpl']}
+)
