@@ -9,18 +9,20 @@ import enum
 from collections import namedtuple
 import yaml
 import shutil
-from .exceptions import ApplicationError, InternalError
+from device_app_manager.exceptions import ApplicationError, InternalError
 
 from jinja2 import Template, Environment, PackageLoader, select_autoescape
 
-from ._logging import create_logger
-from .redis_controller import RedisController
-from .app_model import AppModel
+from device_app_manager._logging import create_logger
+from device_app_manager.redis_controller import RedisController
+from device_app_manager.app_model import AppModel
+
 
 DOCKERFILE_TPL_MAP = {
     'py3': 'Dockerfile.py3.tpl',
     'r4a_commlib': 'Dockerfile.r4a_commlib.tpl',
-    'nodered': 'Dockerfile.nodered.tpl'
+    'nodered': 'Dockerfile.nodered.tpl',
+    'tektrain_nodered': 'Dockerfile.tektrain_nodered.tpl'
     # 'ros2_package': 'Dockerfile.ros2_package.tpl'  ## Not yet supported
 }
 
@@ -115,6 +117,8 @@ class AppBuilderDocker(object):
         elif app_type == 'py3':
             _app = AppModel(app_name, app_type, docker_image_name=image_name)
         elif app_type == 'nodered':
+            _app = AppModel(app_name, app_type, docker_image_name=image_name)
+        elif app_type == 'r4a_nodered':
             _app = AppModel(app_name, app_type, docker_image_name=image_name)
         else:
             raise ValueError('Not supported app_type')

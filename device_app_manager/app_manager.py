@@ -107,6 +107,8 @@ class AppManager(object):
         self._init_custom_ui_handler_endpoints()
         self._init_speak_client()
 
+        self._start_boot_apps()
+
     def _clean_startup(self):
         self.log.info('Prune stopped containers...')
         _c = self.docker_client.containers.prune()
@@ -137,6 +139,16 @@ class AppManager(object):
                     self.log.error(exc, exc_info=True)
                 except docker.errors.APIError as exc:
                     self.log.error(exc, exc_info=True)
+
+    def _start_boot_apps(self):
+        self.log.info('Starting Apps with boot flag enabled')
+        _apps = self.redis.get_apps()
+        for app in _apps:
+            try:
+                if app['scheduler_params']['start_on_boot']:
+                    self.start_app(app['name'])
+            except:
+                pass
 
     def install_app(self, app_name: str, app_type: str, app_tarball_path: str):
         """install_app.

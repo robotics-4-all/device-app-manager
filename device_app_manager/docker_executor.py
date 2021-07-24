@@ -12,8 +12,8 @@ import time
 
 from jinja2 import Template, Environment, PackageLoader, select_autoescape
 
-from ._logging import create_logger
-from .redis_controller import RedisController
+from device_app_manager._logging import create_logger
+from device_app_manager.redis_controller import RedisController
 
 from commlib.transports.redis import ConnectionParameters as RedisParams
 from commlib.logger import Logger
@@ -22,7 +22,8 @@ from commlib.logger import Logger
 DOCKER_COMMAND_MAP = {
     'py3': ['python3', '-u', 'app.py'],
     'r4a_commlib': ['python', '-u', 'app.py'],
-    'nodered': []
+    'nodered': [],
+    'r4a_nodered': []
 }
 
 
@@ -91,7 +92,7 @@ class AppExecutorDocker(object):
         app_type = self.redis.get_app_type(app_name)
         ## DIRTY SOLUTION!!
         docker_cmd = DOCKER_COMMAND_MAP[app_type]
-        if app_args is not None:
+        if app_args is not None and docker_cmd is not []:
             docker_cmd = docker_cmd + app_args
 
         try:

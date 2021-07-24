@@ -88,6 +88,7 @@ priority: <int>
 execution_timestamp: <timestamp>
 retry: <bool>
 max_retries: <int>
+start_on_boot: <bool>
 ```
 
 ### NodeRED Application
