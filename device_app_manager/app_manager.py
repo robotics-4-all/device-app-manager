@@ -161,6 +161,7 @@ class AppManager(object):
             app_tarball_path (str): The path to the application tarball
         """
         _app = self.app_builder.build_app(app_name, app_type, app_tarball_path)
+        self.log.info(f'Application {app_name}<{app_type}> was build succesfully')
 
         if self.redis.app_exists(app_name):
             ## Updating app
@@ -537,7 +538,7 @@ class AppManager(object):
                 'error': ''
             }
         except Exception as e:
-            self.log.error(f'Error while installing application {app_id}',
+            self.log.error(f'Error while installing application {app_name}',
                            exc_info=True)
             return {
                 'status': 404,

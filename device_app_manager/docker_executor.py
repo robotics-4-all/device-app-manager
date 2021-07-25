@@ -23,7 +23,7 @@ DOCKER_COMMAND_MAP = {
     'py3': ['python3', '-u', 'app.py'],
     'r4a_commlib': ['python', '-u', 'app.py'],
     'nodered': [],
-    'r4a_nodered': []
+    'tektrain_nodered': []
 }
 
 
@@ -195,9 +195,12 @@ class AppExecutorDocker(object):
                     _aidx = i
             if _aidx != -1:
                 del self.running_apps[_aidx]
+            self.log.info(f'Application <{app_name}> exited.')
         except docker.errors.APIError as exc:
+            self.log.info(f'Application <{app_name}> exited with errors')
             self.log.error(exc, exc_info=True)
         except Exception as exc:
+            self.log.info(f'Application <{app_name}> exited with errors')
             self.log.error(exc, exc_info=True)
 
     def _detach_app_logging(self, app_name, container, publisher):

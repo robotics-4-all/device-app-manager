@@ -60,6 +60,10 @@ class AppBuilderDocker(object):
         app_dir = self._prepare_build(
             app_name, app_type, app_tarball_path)
 
+        contents = os.listdir(app_dir)
+
+        self.logger.info(f'Application <{app_name}> contents: {contents}')
+
         # Check if folder ui in app_dir
         # ------------------------------------------------------------->
         target_dir = None
@@ -115,10 +119,13 @@ class AppBuilderDocker(object):
                             scheduler_params=scheduler_params, ui=target_dir,
                             voice_command_params=voice_params)
         elif app_type == 'py3':
+            self.logger.info('Python3 Application')
             _app = AppModel(app_name, app_type, docker_image_name=image_name)
         elif app_type == 'nodered':
+            self.logger.info('Nodered Application')
             _app = AppModel(app_name, app_type, docker_image_name=image_name)
-        elif app_type == 'r4a_nodered':
+        elif app_type == 'tektrain_nodered':
+            self.logger.info('TekTrain-Nodered Application')
             _app = AppModel(app_name, app_type, docker_image_name=image_name)
         else:
             raise ValueError('Not supported app_type')
