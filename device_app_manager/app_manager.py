@@ -250,7 +250,9 @@ class AppManager(object):
         logs_publisher = self._local_node.create_publisher(
             topic=_logs_topic)
 
-        self.app_executor.run_app(app_name, app_args, auto_remove=auto_remove,
+        self.app_executor.run_app(app_name,
+                                  app_args,
+                                  auto_remove=auto_remove,
                                   logs_publisher=logs_publisher)
         return app_name
 
@@ -279,7 +281,14 @@ class AppManager(object):
                 _r_apps.append(app)
         return _r_apps
 
-    def fast_deploy(self, app_name, app_type, app_tarball_path, app_args=[]):
+    def fast_deploy(self,
+                    app_name: str,
+                    app_type: str,
+                    app_tarball_path: str,
+                    app_args: list = []):
+        """
+        Executes a sequence of INSTALL-START-DELETE operations for an app
+        """
         self.install_app(app_name, app_type, app_tarball_path)
         time.sleep(1)
         self.start_app(app_name, app_args=app_args, auto_remove=True)
@@ -415,6 +424,17 @@ class AppManager(object):
             conn_params.credentials.password = \
                 self._local_broker_params['password']
             _btype = TransportType.AMQP
+        elif self._local_broker_params['type'] == 'MQTT':
+            from commlib.transports.mqtt import ConnectionParameters
+            conn_params = ConnectionParameters(
+                host=self._local_broker_params['host'],
+                port=self._local_broker_params['port']
+            )
+            conn_params.credentials.username = \
+                self._local_broker_params['username']
+            conn_params.credentials.password = \
+                self._local_broker_params['password']
+            _btype = TransportType.MQTT
 
         self._local_node = Node('AppManager',
                                 transport_type=_btype,
