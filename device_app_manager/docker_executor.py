@@ -12,8 +12,8 @@ import time
 
 from jinja2 import Template, Environment, PackageLoader, select_autoescape
 
-from device_app_manager._logging import create_logger
-from device_app_manager.redis_controller import RedisController
+from ._logging import create_logger
+from .db_controller import RedisController
 
 from commlib.transports.redis import ConnectionParameters as RedisParams
 from commlib.logger import Logger

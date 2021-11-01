@@ -13,9 +13,9 @@ from device_app_manager.exceptions import ApplicationError, InternalError
 
 from jinja2 import Template, Environment, PackageLoader, select_autoescape
 
-from device_app_manager._logging import create_logger
-from device_app_manager.redis_controller import RedisController
-from device_app_manager.app_model import AppModel
+from ._logging import create_logger
+from .db_controller import RedisController
+from .app_model import AppModel
 
 
 DOCKERFILE_TPL_MAP = {

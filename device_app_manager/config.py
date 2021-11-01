@@ -252,28 +252,20 @@ def load_cfg(cfg_file):
         speak_action_uri = \
             '/robot/robot_1/actuator/audio/speaker/usb_speaker/d0/id_0/speak'
     ## ------------------------------------------------------------
-    ## ------------------ Redis Parameters  -----------------------
+    ## ------------------ DB Parameters  -----------------------
     ## ------------------------------------------------------------
     try:
-        redis_host = config.get('redis', 'host')
+        db_type = config.get('db', 'type')
     except configparser.NoOptionError:
-        redis_host = 'localhost'
+        db_type = 'redis'
     try:
-        redis_port = config.getint('redis', 'port')
+        db_password = config.get('db', 'password')
     except configparser.NoOptionError:
-        redis_port = 6379
+        db_password = ''
     try:
-        redis_db = config.getint('redis', 'database')
+        db_app_list_name = config.get('db', 'app_list_name')
     except configparser.NoOptionError:
-        redis_db = 0
-    try:
-        redis_password = config.get('redis', 'password')
-    except configparser.NoOptionError:
-        redis_password = ''
-    try:
-        redis_app_list_name = config.get('redis', 'app_list_name')
-    except configparser.NoOptionError:
-        redis_app_list_name = 'appmanager.apps'
+        db_app_list_name = 'appmanager.apps'
 
     print(local_uri_namespace)
 
@@ -311,11 +303,9 @@ def load_cfg(cfg_file):
             'db': local_broker_db
         },
         'redis': {
-            'host': redis_host,
-            'port': redis_port,
-            'db': redis_db,
-            'password': redis_password,
-            'app_list_name': redis_app_list_name,
+            'type': db_type,
+            'password': db_password,
+            'app_list_name': db_app_list_name,
         },
         'monitoring': {
             'heartbeat_interval': heartbeat_interval,

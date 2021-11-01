@@ -1,29 +1,25 @@
-import sys
-import os
-import uuid
-import time
-import signal
-import json
-import subprocess
-import shutil
-import shlex
-import threading
+import atexit
 # from collections import namedtuple
 import base64
-import atexit
 import json
+import os
+import shlex
 import shutil
+import signal
+import subprocess
+import sys
+import threading
+import time
+import uuid
 
-import redis
 import docker
-
-from commlib.node import TransportType, Node
-from commlib.logger import Logger
 from commlib.events import Event
+from commlib.logger import Logger
+from commlib.node import Node, TransportType
 
 from .docker_builder import AppBuilderDocker
 from .docker_executor import AppExecutorDocker
-from .redis_controller import RedisController, RedisConnectionParams
+from .db_controller import RedisConnectionParams, RedisController
 
 
 class AppManager(object):
@@ -70,21 +66,21 @@ class AppManager(object):
 
         self.log = Logger('AppManager', debug=True)
 
-        redis_params = RedisConnectionParams(
-            host=redis_params['host'],
-            port=redis_params['port'],
-            db=redis_params['db'],
-            password=redis_params['password'],
-            redis_app_list_name=redis_params['app_list_name']
-        )
+        if redis_params['type'] == 'redis':
+            redis_params = RedisConnectionParams(
+                password=redis_params['password'],
+                redis_app_list_name=redis_params['app_list_name']
+            )
+            self.db = RedisController(redis_params,
+                                         self._redis_params['app_list_name'])
+        else:
+            raise ValueError('Database type not recognized')
 
         self.docker_client = docker.from_env()
 
         self._create_app_storage_dir()
 
-        self.redis = RedisController(redis_params,
-                                     self._redis_params['app_list_name'])
-        if not self.redis.ping():
+        if not self.db.ping():
             raise Exception('Could not connect to redis server.')
 
         self.app_builder = AppBuilderDocker(
@@ -113,11 +109,11 @@ class AppManager(object):
         self.log.info('Prune stopped containers...')
         _c = self.docker_client.containers.prune()
         self.log.info('Cleaning up possible zombie containers...')
-        _apps = self.redis.get_apps()
+        _apps = self.db.get_apps()
         for app in _apps:
             app_name = app['name']
             app_state = app['state']
-            _cid = self.redis.get_app_container(app_name)
+            _cid = self.db.get_app_container(app_name)
             if app_state == 1:
                 try:
                     self.log.info(f'Found zombie app! Removing {app_name}...')
@@ -129,8 +125,8 @@ class AppManager(object):
                 except Exception as exc:
                     self.log.error(exc, exc_info=True)
                 finally:
-                    self.redis.set_app_state(app_name, 0)
-                    self.redis.save_db()
+                    self.db.set_app_state(app_name, 0)
+                    self.db.save_db()
             elif _cid not in [None, '']:
                 try:
                     _c = self.docker_client.containers.get(_cid)
@@ -142,7 +138,7 @@ class AppManager(object):
 
     def _start_boot_apps(self):
         self.log.info('Starting Apps with boot flag enabled')
-        _apps = self.redis.get_apps()
+        _apps = self.db.get_apps()
         for app in _apps:
             try:
                 if app['scheduler_params']['start_on_boot']:
@@ -163,14 +159,14 @@ class AppManager(object):
         _app = self.app_builder.build_app(app_name, app_type, app_tarball_path)
         self.log.info(f'Application {app_name}<{app_type}> was build succesfully')
 
-        if self.redis.app_exists(app_name):
+        if self.db.app_exists(app_name):
             ## Updating app
             self.log.info(f'Updating App in DB: <{app_name}>')
-            self.redis.update_app(_app.serialize())
+            self.db.update_app(_app.serialize())
         else:
             ## Creating new app instance in db
             self.log.info(f'Storing new App in DB: <{app_name}>')
-            self.redis.add_app(_app.serialize())
+            self.db.add_app(_app.serialize())
 
         # Set rhassphy sentences for activating the application.
         ## Look here: https://github.com/robotics-4-all/sythes-voice-events-system
@@ -178,7 +174,7 @@ class AppManager(object):
             self.log.info('Setting Rhasspy Sentences...')
             resp = self._set_rhasspy_sentences(app_name, _app.voice_commands)
 
-        self.redis.save_db()
+        self.db.save_db()
         return app_name
 
     def delete_app(self, app_name: str, force_stop: bool = False):
@@ -189,21 +185,21 @@ class AppManager(object):
             app_name (str): The name/id of application
             force_stop (bool): Force stop application container
         """
-        if not self.redis.app_exists(app_name):
+        if not self.db.app_exists(app_name):
             raise ValueError(f'App <{app_name}> does not exist locally')
 
-        if self.redis.app_is_running(app_name) and force_stop:
+        if self.db.app_is_running(app_name) and force_stop:
             self.log.info(f'Stopping App <{app_name}> before deleting...')
             self.stop_app(app_name)
 
         self.log.info(f'Deleting docker image for app <{app_name}>...')
         try:
-            docker_app_image = self.redis.get_app_image(app_name)
+            docker_app_image = self.db.get_app_image(app_name)
             self.docker_client.images.remove(image=docker_app_image, force=True)
         except Exception as e:
             self.log.error(e, exc_info=True)
 
-        _app = self.redis.get_app(app_name)
+        _app = self.db.get_app(app_name)
 
         # Check if app has ui and remove it
         try:
@@ -226,13 +222,13 @@ class AppManager(object):
                 exc_info=False
             )
         try:
-            self.redis.delete_app(app_name)
+            self.db.delete_app(app_name)
         except Exception:
             self.log.warn(
                 f'Failed to remove app entry ({app_name}) from local DB.',
                 exc_info=False
             )
-        self.redis.save_db()
+        self.db.save_db()
 
     def start_app(self, app_name, app_args=[], auto_remove=False):
         """start_app.
@@ -243,16 +239,16 @@ class AppManager(object):
             auto_remove: Autoremove application from local repo upon termination
                 of the current execution. Used for testing applications.
         """
-        if not self.redis.app_exists(app_name):
+        if not self.db.app_exists(app_name):
             raise ValueError(f'App <{app_name}> does not exist locally')
 
-        app = self.redis.get_app(app_name)
+        app = self.db.get_app(app_name)
 
         if app['state'] == 1:
             raise ValueError('Application is allready running.')
 
         _logs_topic = self._app_params['app_logs_topic']
-        _logs_topic = self.__add_platform_ns(_logs_topic)
+        _logs_topic = self._add_platform_ns(_logs_topic)
         _logs_topic = _logs_topic.replace('{APP_ID}', app_name)
         logs_publisher = self._local_node.create_publisher(
             topic=_logs_topic)
@@ -270,16 +266,16 @@ class AppManager(object):
         self._stop_app_ui_component(app_id)
 
     def stop_app(self, app_name):
-        if not self.redis.app_exists(app_name):
+        if not self.db.app_exists(app_name):
             raise ValueError(f'App <{app_name}> does not exist locally')
         self.app_executor.stop_app(app_name)
         self.log.info(f'App <{app_name}> stopped!')
 
     def get_apps(self):
-        return self.redis.get_apps()
+        return self.db.get_apps()
 
     def get_running_apps(self):
-        apps = self.redis.get_apps()
+        apps = self.db.get_apps()
         _r_apps = []
         for app in apps:
             if app['state'] == 1:
@@ -289,6 +285,7 @@ class AppManager(object):
     def fast_deploy(self, app_name, app_type, app_tarball_path, app_args=[]):
         self.install_app(app_name, app_type, app_tarball_path)
         self.start_app(app_name, app_args=app_args, auto_remove=True)
+        self.delete_app(app_name, force_stop=False)
         return app_name
 
     def _init_platform_node(self):
@@ -297,7 +294,8 @@ class AppManager(object):
             conn_params = ConnectionParameters(
                 host=self._platform_broker_params['host'],
                 port=self._platform_broker_params['port'],
-                db=self._platform_broker_params['db'])
+                db=self._platform_broker_params['db']
+            )
             conn_params.credentials.username = \
                 self._platform_broker_params['username']
             conn_params.credentials.password = \
@@ -308,12 +306,24 @@ class AppManager(object):
             conn_params = ConnectionParameters(
                 host=self._platform_broker_params['host'],
                 port=self._platform_broker_params['port'],
-                vhost=self._platform_broker_params['vhost'])
+                vhost=self._platform_broker_params['vhost']
+            )
             conn_params.credentials.username = \
                 self._platform_broker_params['username']
             conn_params.credentials.password = \
                 self._platform_broker_params['password']
             _btype = TransportType.AMQP
+        elif self._platform_broker_params['type'] == 'MQTT':
+            from commlib.transports.mqtt import ConnectionParameters
+            conn_params = ConnectionParameters(
+                host=self._platform_broker_params['host'],
+                port=self._platform_broker_params['port']
+            )
+            conn_params.credentials.username = \
+                self._platform_broker_params['username']
+            conn_params.credentials.password = \
+                self._platform_broker_params['password']
+            _btype = TransportType.MQTT
 
         self._platform_node = Node(self.__class__.__name__,
                                    transport_type=_btype,
@@ -321,7 +331,7 @@ class AppManager(object):
                                    debug=self.debug)
 
         _hb_topic = self._monitoring_params['heartbeat_topic']
-        _hb_topic = self.__add_platform_ns(_hb_topic)
+        _hb_topic = self._add_platform_ns(_hb_topic)
         self._platform_node.init_heartbeat_thread(_hb_topic)
 
         self._platform_event_emitter = \
@@ -329,56 +339,56 @@ class AppManager(object):
 
         # ---------------------- Alive RPC Service ----------------------
         rpc_name = self._control_params['alive_rpc_name']
-        rpc_name = self.__add_platform_ns(rpc_name)
+        rpc_name = self._add_platform_ns(rpc_name)
         self._platform_node.create_rpc(
             rpc_name=rpc_name,
             on_request=self._isalive_rpc_callback,
             debug=self.debug).run()
         # --------------------- Get-Apps RPC Service --------------------
         rpc_name = self._control_params['app_list_rpc_name']
-        rpc_name = self.__add_platform_ns(rpc_name)
+        rpc_name = self._add_platform_ns(rpc_name)
         self._platform_node.create_rpc(
             rpc_name=rpc_name,
             on_request=self._get_apps_rpc_callback,
             debug=self.debug).run()
         # ----------------- Get-Running-Apps RPC Service ----------------
         rpc_name = self._control_params['get_running_apps_rpc_name']
-        rpc_name = self.__add_platform_ns(rpc_name)
+        rpc_name = self._add_platform_ns(rpc_name)
         self._platform_node.create_rpc(
             rpc_name=rpc_name,
             on_request=self._get_running_apps_rpc_callback,
             debug=self.debug).run()
         # -------------------- Install-App RPC Service ------------------
         rpc_name = self._control_params['app_install_rpc_name']
-        rpc_name = self.__add_platform_ns(rpc_name)
+        rpc_name = self._add_platform_ns(rpc_name)
         self._platform_node.create_rpc(
             rpc_name=rpc_name,
             on_request=self._install_app_rpc_callback,
             debug=self.debug).run()
         # --------------------- Start-App RPC Service -------------------
         rpc_name = self._control_params['app_start_rpc_name']
-        rpc_name = self.__add_platform_ns(rpc_name)
+        rpc_name = self._add_platform_ns(rpc_name)
         self._platform_node.create_rpc(
             rpc_name=rpc_name,
             on_request=self._start_app_rpc_callback,
             debug=self.debug).run()
         # --------------------- Stop-App RPC Service --------------------
         rpc_name = self._control_params['app_stop_rpc_name']
-        rpc_name = self.__add_platform_ns(rpc_name)
+        rpc_name = self._add_platform_ns(rpc_name)
         self._platform_node.create_rpc(
             rpc_name=rpc_name,
             on_request=self._stop_app_rpc_callback,
             debug=self.debug).run()
         # --------------------- Delete-App RPC Service --------------------
         rpc_name = self._control_params['app_delete_rpc_name']
-        rpc_name = self.__add_platform_ns(rpc_name)
+        rpc_name = self._add_platform_ns(rpc_name)
         self._platform_node.create_rpc(
             rpc_name=rpc_name,
             on_request=self._delete_app_rpc_callback,
             debug=self.debug).run()
         # --------------------- Fast-Deploy-App RPC Service --------------------
         rpc_name = self._control_params['fast_deploy_rpc_name']
-        rpc_name = self.__add_platform_ns(rpc_name)
+        rpc_name = self._add_platform_ns(rpc_name)
         self._platform_node.create_rpc(
             rpc_name=rpc_name,
             on_request=self._fast_deploy_rpc_callback,
@@ -413,63 +423,63 @@ class AppManager(object):
                                 transport_connection_params=conn_params,
                                 debug=self.debug)
         _hb_topic = self._monitoring_params['heartbeat_topic']
-        _hb_topic = self.__add_local_ns(_hb_topic)
+        _hb_topic = self._add_local_ns(_hb_topic)
         self._local_node.init_heartbeat_thread(_hb_topic)
 
         self._local_event_emitter = self._local_node.create_event_emitter()
 
         # ---------------------- Alive RPC Service ----------------------
         rpc_name = self._control_params['alive_rpc_name']
-        rpc_name = self.__add_local_ns(rpc_name)
+        rpc_name = self._add_local_ns(rpc_name)
         self._local_node.create_rpc(
             rpc_name=rpc_name,
             on_request=self._isalive_rpc_callback,
             debug=self.debug).run()
         # --------------------- Get-Apps RPC Service --------------------
         rpc_name = self._control_params['app_list_rpc_name']
-        rpc_name = self.__add_local_ns(rpc_name)
+        rpc_name = self._add_local_ns(rpc_name)
         self._local_node.create_rpc(
             rpc_name=rpc_name,
             on_request=self._get_apps_rpc_callback,
             debug=self.debug).run()
         # ----------------- Get-Running-Apps RPC Service ----------------
         rpc_name = self._control_params['get_running_apps_rpc_name']
-        rpc_name = self.__add_local_ns(rpc_name)
+        rpc_name = self._add_local_ns(rpc_name)
         self._local_node.create_rpc(
             rpc_name=rpc_name,
             on_request=self._get_running_apps_rpc_callback,
             debug=self.debug).run()
         # -------------------- Install-App RPC Service ------------------
         rpc_name = self._control_params['app_install_rpc_name']
-        rpc_name = self.__add_local_ns(rpc_name)
+        rpc_name = self._add_local_ns(rpc_name)
         self._local_node.create_rpc(
             rpc_name=rpc_name,
             on_request=self._install_app_rpc_callback,
             debug=self.debug).run()
         # --------------------- Start-App RPC Service -------------------
         rpc_name = self._control_params['app_start_rpc_name']
-        rpc_name = self.__add_local_ns(rpc_name)
+        rpc_name = self._add_local_ns(rpc_name)
         self._local_node.create_rpc(
             rpc_name=rpc_name,
             on_request=self._start_app_rpc_callback,
             debug=self.debug).run()
         # --------------------- Stop-App RPC Service --------------------
         rpc_name = self._control_params['app_stop_rpc_name']
-        rpc_name = self.__add_local_ns(rpc_name)
+        rpc_name = self._add_local_ns(rpc_name)
         self._local_node.create_rpc(
             rpc_name=rpc_name,
             on_request=self._stop_app_rpc_callback,
             debug=self.debug).run()
         # --------------------- Delete-App RPC Service --------------------
         rpc_name = self._control_params['app_delete_rpc_name']
-        rpc_name = self.__add_local_ns(rpc_name)
+        rpc_name = self._add_local_ns(rpc_name)
         self._local_node.create_rpc(
             rpc_name=rpc_name,
             on_request=self._delete_app_rpc_callback,
             debug=self.debug).run()
         # --------------------- Fast-Deploy-App RPC Service --------------------
         rpc_name = self._control_params['fast_deploy_rpc_name']
-        rpc_name = self.__add_local_ns(rpc_name)
+        rpc_name = self._add_local_ns(rpc_name)
         self._local_node.create_rpc(
             rpc_name=rpc_name,
             on_request=self._fast_deploy_rpc_callback,
@@ -477,7 +487,7 @@ class AppManager(object):
 
     def _cleanup(self):
         self._send_disconnected_event()
-        _rapps = self.redis.get_running_apps()
+        _rapps = self.db.get_running_apps()
         for _app in _rapps:
             self.stop_app(_app['name'])
 
@@ -511,6 +521,10 @@ class AppManager(object):
         }
 
     def _install_app_rpc_callback(self, msg, meta=None):
+        """
+        Install application RPC callback
+
+        """
         try:
             self.log.debug('RPC Request: install_app')
             if 'app_id' not in msg:
@@ -547,6 +561,10 @@ class AppManager(object):
             }
 
     def _delete_app_rpc_callback(self, msg, meta=None):
+        """
+        Delete application RPC callback
+
+        """
         try:
             self.log.debug('RPC Request: delete_app')
             if 'app_id' not in msg:
@@ -574,6 +592,10 @@ class AppManager(object):
             }
 
     def _start_app_rpc_callback(self, msg, meta=None):
+        """
+        Start application RPC callback
+
+        """
         resp =  {
             'status': 200,
             'error': ''
@@ -601,6 +623,10 @@ class AppManager(object):
             return resp
 
     def _stop_app_rpc_callback(self, msg, meta=None):
+        """
+        Stop application RPC callback
+
+        """
         resp = {
             'status': 200,
             'error': ''
@@ -615,7 +641,7 @@ class AppManager(object):
             if not isinstance(app_name, str):
                 raise TypeError('Parameter app_name should be of type string')
 
-            if not self.redis.app_exists(app_name):
+            if not self.db.app_exists(app_name):
                 raise ValueError(f'App <{app_name}> does not exist locally')
 
             self.stop_app(app_name)
@@ -628,6 +654,10 @@ class AppManager(object):
             return resp
 
     def _fast_deploy_rpc_callback(self, msg, meta=None):
+        """
+        Fast-Deploy application RPC callback
+
+        """
         resp = {
             'status': 200,
             'error': '',
@@ -675,6 +705,10 @@ class AppManager(object):
             return resp
 
     def _get_apps_rpc_callback(self, msg, meta=None):
+        """
+        Get installed application RPC callback
+
+        """
         resp = {
             'status': 200,
             'apps': [],
@@ -691,6 +725,10 @@ class AppManager(object):
             return resp
 
     def _get_running_apps_rpc_callback(self, msg, meta=None):
+        """
+        Get currently running application RPC callback
+
+        """
         resp = {
             'status': 200,
             'apps': [],
@@ -708,17 +746,17 @@ class AppManager(object):
 
     def _send_connected_event(self):
         _uri = f'{self._monitoring_params["connected_event"]}'
-        _luri = self.__add_local_ns(_uri)
+        _luri = self._add_local_ns(_uri)
         event = Event('AppManager-Connected', _luri)
         self._local_event_emitter.send_event(event)
-        _puri = self.__add_platform_ns(_uri)
+        _puri = self._add_platform_ns(_uri)
         event = Event('AppManager-Connected', _puri)
         self._platform_event_emitter.send_event(event)
 
     def _send_disconnected_event(self):
         _uri = f'{self._monitoring_params["disconnected_event"]}'
-        _luri = self.__add_local_ns(_uri)
-        _puri = self.__add_platform_ns(_uri)
+        _luri = self._add_local_ns(_uri)
+        _puri = self._add_platform_ns(_uri)
         event = Event('AppManager-Disconnected', _luri)
         self._local_event_emitter.send_event(event)
         event = Event('AppManager-Disconnected', _puri)
@@ -726,8 +764,8 @@ class AppManager(object):
 
     def _send_app_started_event(self, app_id):
         _uri = f'{self._app_params["app_started_event"]}'
-        _luri = self.__add_local_ns(_uri).replace('{APP_ID}', app_id)
-        _puri = self.__add_platform_ns(_uri).replace('{APP_ID}', app_id)
+        _luri = self._add_local_ns(_uri).replace('{APP_ID}', app_id)
+        _puri = self._add_platform_ns(_uri).replace('{APP_ID}', app_id)
         event = Event('Application-Started', _luri)
         self._local_event_emitter.send_event(event)
         event = Event('Application-Started', _puri)
@@ -735,8 +773,8 @@ class AppManager(object):
 
     def _send_app_stopped_event(self, app_id):
         _uri = f'{self._app_params["app_stopped_event"]}'
-        _luri = self.__add_local_ns(_uri).replace('{APP_ID}', app_id)
-        _puri = self.__add_platform_ns(_uri).replace('{APP_ID}', app_id)
+        _luri = self._add_local_ns(_uri).replace('{APP_ID}', app_id)
+        _puri = self._add_platform_ns(_uri).replace('{APP_ID}', app_id)
         event = Event('Application-Stopped', _luri)
         self._local_event_emitter.send_event(event)
         event = Event('Application-Stopped', _puri)
@@ -763,7 +801,7 @@ class AppManager(object):
         return resp
 
     def _start_app_ui_component(self, app_name: str) -> None:
-        ui = self.redis.get_app(app_name)['ui']
+        ui = self.db.get_app(app_name)['ui']
         if ui is not None:
             self.log.info("Raising UI from the dead!")
             res = self._ui_start.call({"dir": ui + "/"})
@@ -772,7 +810,7 @@ class AppManager(object):
             self.log.info("No UI for this app")
 
     def _stop_app_ui_component(self, app_name: str) -> None:
-        ui = self.redis.get_app(app_name)['ui']
+        ui = self.db.get_app(app_name)['ui']
         if ui is not None:
             self.log.info("Banishing UI to the dead")
             res = self._ui_stop.call({}, timeout=1)
@@ -795,7 +833,7 @@ class AppManager(object):
             action_name=self._audio_events_params['speak_action_uri']
         )
 
-    def __add_local_ns(self, uri: str):
+    def _add_local_ns(self, uri: str):
         _ns = self._core_params['uri_namespace']
         _local_ns = self._local_broker_params['uri_namespace']
         if _ns != '':
@@ -805,7 +843,7 @@ class AppManager(object):
         uri = uri.replace('{DEVICE_ID}', self._core_params['device_id'])
         return uri
 
-    def __add_platform_ns(self, uri: str):
+    def _add_platform_ns(self, uri: str):
         _ns = self._core_params['uri_namespace']
         _platform_ns = self._platform_broker_params['uri_namespace']
         if _ns != '':
