@@ -302,7 +302,7 @@ def load_cfg(cfg_file):
             'vhost': local_broker_vhost,
             'db': local_broker_db
         },
-        'redis': {
+        'db': {
             'type': db_type,
             'password': db_password,
             'app_list_name': db_app_list_name,

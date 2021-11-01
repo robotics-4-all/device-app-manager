@@ -83,7 +83,7 @@ def main():
     manager = AppManager(
         config['platform_broker'],
         config['local_broker'],
-        config['redis'],
+        config['db'],
         config['core'],
         config['monitoring'],
         config['applications'],

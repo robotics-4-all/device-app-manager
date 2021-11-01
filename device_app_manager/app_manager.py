@@ -41,7 +41,7 @@ class AppManager(object):
     def __init__(self,
                  platform_broker_params,
                  local_broker_params,
-                 redis_params,
+                 db_params,
                  core_params,
                  monitoring_params,
                  app_params,
@@ -53,7 +53,7 @@ class AppManager(object):
 
         self._platform_broker_params = platform_broker_params
         self._local_broker_params = local_broker_params
-        self._redis_params = redis_params
+        self._db_params = db_params
         self._core_params = core_params
         self._monitoring_params = monitoring_params
         self._app_params = app_params
@@ -66,13 +66,11 @@ class AppManager(object):
 
         self.log = Logger('AppManager', debug=True)
 
-        if redis_params['type'] == 'redis':
-            redis_params = RedisConnectionParams(
-                password=redis_params['password'],
-                redis_app_list_name=redis_params['app_list_name']
+        if db_params['type'] == 'redis':
+            conn_params = RedisConnectionParams(
+                password=db_params['password'],
             )
-            self.db = RedisController(redis_params,
-                                         self._redis_params['app_list_name'])
+            self.db = RedisController(conn_params, db_params['app_list_name'])
         else:
             raise ValueError('Database type not recognized')
 
@@ -81,7 +79,7 @@ class AppManager(object):
         self._create_app_storage_dir()
 
         if not self.db.ping():
-            raise Exception('Could not connect to redis server.')
+            raise Exception('Could not connect to database.')
 
         self.app_builder = AppBuilderDocker(
             build_dir=self._core_params['app_build_dir'],
@@ -89,8 +87,7 @@ class AppManager(object):
         )
 
         self.app_executor = AppExecutorDocker(
-            redis_params,
-            redis_app_list_name=self._redis_params['app_list_name'],
+            db_params,
             on_app_started=self._on_app_started,
             on_app_stopped=self._on_app_stopped
         )

@@ -13,7 +13,7 @@ import time
 from jinja2 import Template, Environment, PackageLoader, select_autoescape
 
 from ._logging import create_logger
-from .db_controller import RedisController
+from .db_controller import RedisController, RedisConnectionParams
 
 from commlib.transports.redis import ConnectionParameters as RedisParams
 from commlib.logger import Logger
@@ -44,8 +44,7 @@ class AppExecutorDocker(object):
     APP_STOPED_EVENT = 'thing.x.app.y.stopped'
 
     def __init__(self,
-                 redis_params: dict,
-                 redis_app_list_name: str,
+                 db_params: dict,
                  on_app_started: callable = True,
                  on_app_stopped: callable = True,
                  logger = None):
@@ -66,8 +65,15 @@ class AppExecutorDocker(object):
         if logger is None:
             logger = Logger('AppManager-DockerExecutor')
         self.log = logger
-        self.redis = RedisController(redis_params, redis_app_list_name)
         self.running_apps = []  # Array of tuples (app_name, container_name)
+
+        if db_params['type'] == 'redis':
+            conn_params = RedisConnectionParams(
+                password=db_params['password'],
+            )
+            self.db = RedisController(conn_params, db_params['app_list_name'])
+        else:
+            raise ValueError('Database type not recognized')
 
         self.container_config = DockerContainerConfig()
         self._rparams = RedisParams(host='localhost')
@@ -86,10 +92,10 @@ class AppExecutorDocker(object):
             app_name (str): Application name.
             app_args (list): Application Arguments passed via stdin.
         """
-        image_id = self.redis.get_app_image(app_name)
+        image_id = self.db.get_app_image(app_name)
         _container_name = app_name
 
-        app_type = self.redis.get_app_type(app_name)
+        app_type = self.db.get_app_type(app_name)
         ## DIRTY SOLUTION!!
         docker_cmd = DOCKER_COMMAND_MAP[app_type]
         if app_args is not None and docker_cmd is not []:
@@ -102,9 +108,9 @@ class AppExecutorDocker(object):
             self.log.error(exc, exc_info=True)
             raise exc
 
-        self.redis.set_app_state(app_name, 1)
-        self.redis.set_app_container(app_name, _container_name, _container.id)
-        self.redis.save_db()
+        self.db.set_app_state(app_name, 1)
+        self.db.set_app_container(app_name, _container_name, _container.id)
+        self.db.save_db()
 
         log_thread = None
         if logs_publisher is not None:
@@ -134,9 +140,9 @@ class AppExecutorDocker(object):
         Args:
             app_name (str): Application Name (==app-id).
         """
-        if not self.redis.app_is_running(app_name):
+        if not self.db.app_is_running(app_name):
             raise ValueError('Application <{}> is not running'.format(app_name))
-        _container_id = self.redis.get_app_container(app_name)
+        _container_id = self.db.get_app_container(app_name)
         self.log.debug('Killing container: {}'.format(_container_id))
         c = self.docker_client.containers.get(_container_id)
         try:
@@ -177,17 +183,17 @@ class AppExecutorDocker(object):
 
     def _app_exit_handler(self, app_name, container, auto_remove=False):
         try:
-            if not self.redis.app_exists(app_name):
+            if not self.db.app_exists(app_name):
                 raise RuntimeError(
                     f'[AppExitHandler] - App <{app_name}> does not exist')
             self._on_app_stopped(app_name)
             container.remove(force=True)
-            self.redis.set_app_state(app_name, 0)
+            self.db.set_app_state(app_name, 0)
             if auto_remove:
-                self.redis.delete_app(app_name)
+                self.db.delete_app(app_name)
                 self.docker_client.images.remove(container.image.id,
                                                  force=True)
-            self.redis.save_db()
+            self.db.save_db()
 
             _aidx = -1
             for i in range(len(self.running_apps)):
