@@ -243,7 +243,7 @@ def load_cfg(cfg_file):
     ## ------------------ Audio-Events Parameters ----------------------
     ## ----------------------------------------------------------------
     try:
-        audio_events_enable = config.get('audio_events', 'enable')
+        audio_events_enable = config.getboolean('audio_events', 'enable')
     except configparser.NoOptionError:
         audio_events_enable = 1
     try:

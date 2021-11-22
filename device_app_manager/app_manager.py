@@ -168,10 +168,18 @@ class AppManager(object):
         # Set rhassphy sentences for activating the application.
         ## Look here: https://github.com/robotics-4-all/sythes-voice-events-system
         if _app.voice_commands is not None:
-            self.log.info('Setting Rhasspy Sentences...')
-            resp = self._set_rhasspy_sentences(app_name, _app.voice_commands)
+            try:
+                resp = self._set_rhasspy_sentences(app_name, _app.voice_commands)
+            except Exception as e:
+                self.log.error(f'Error on calling set_rhasspy_sentences')
+                self.log.error(e, exc_info=True)
 
         self.db.save_db()
+        try:
+            self._vocal_app_installed(app_name)
+        except Exception as e:
+            self.log.error(f'Error on calling vocal_app_installed')
+            self.log.error(e, exc_info=True)
         return app_name
 
     def delete_app(self, app_name: str, force_stop: bool = False):
@@ -226,6 +234,11 @@ class AppManager(object):
                 exc_info=False
             )
         self.db.save_db()
+        try:
+            self._vocal_app_uninstalled(app_name)
+        except Exception as e:
+            self.log.error(f'Error on calling vocal_app_installed')
+            self.log.error(e, exc_info=True)
 
     def start_app(self, app_name, app_args=[], auto_remove=False):
         """start_app.
@@ -815,7 +828,7 @@ class AppManager(object):
             'sentences': sentences
         }
         self.log.info('Calling Rhasspy Add-Sentences RPC...')
-        resp = self._rhasspy_add_sentences.call(msg)
+        resp = self._rhasspy_add_sentences.call(msg, timeout=10)
         return resp
 
     def _start_app_ui_component(self, app_name: str) -> None:
@@ -870,6 +883,26 @@ class AppManager(object):
             uri = f'{_platform_ns}.{uri}'
         uri = uri.replace('{DEVICE_ID}', self._core_params['device_id'])
         return uri
+
+    def _speak(self, text: str, volume: int = 75, lang: str = 'el'):
+        if not self._audio_events_params['enable'] or \
+            self._audio_events_params['speak_action_uri'] in ('', None):
+            self.log.warn('Cannot send speak command - Check config!')
+            return
+        speak_goal_data = {
+            'text': text,
+            'volume': volume,
+            'language': lang
+        }
+        self._speak_action.send_goal(speak_goal_data, timeout=1)
+
+    def _vocal_app_installed(self, app_name: str):
+        text = f'Η εγκατάσταση της εφαρμογής {app_name} ολοκληρώθηκε με επιτυχία'
+        self._speak(text=text)
+
+    def _vocal_app_uninstalled(self, app_name: str):
+        text = f'Η απεγκατάσταση της εφαρμογής {app_name} ολοκληρώθηκε με επιτυχία'
+        self._speak(text=text)
 
     def run(self):
         self._send_connected_event()
