@@ -11,6 +11,7 @@ import sys
 import threading
 import time
 import uuid
+import pathlib
 
 import docker
 from commlib.events import Event
@@ -235,7 +236,7 @@ class AppManager(object):
             )
         self.db.save_db()
         try:
-            self._vocal_app_uninstalled(app_name)
+            self._vocal_app_deleted(app_name)
         except Exception as e:
             self.log.error(f'Error on calling vocal_app_installed')
             self.log.error(e, exc_info=True)
@@ -272,10 +273,14 @@ class AppManager(object):
     def _on_app_started(self, app_id: str):
         self._send_app_started_event(app_id)
         self._start_app_ui_component(app_id)
+        if self._audio_events_params['app_started_event']:
+            self._play_sound_effect('app_started')
 
     def _on_app_stopped(self, app_id: str):
         self._send_app_stopped_event(app_id)
         self._stop_app_ui_component(app_id)
+        if self._audio_events_params['app_termination_event']:
+            self._play_sound_effect('app_termination')
 
     def stop_app(self, app_name):
         if not self.db.app_exists(app_name):
@@ -885,9 +890,10 @@ class AppManager(object):
         return uri
 
     def _speak(self, text: str, volume: int = 75, lang: str = 'el'):
-        if not self._audio_events_params['enable'] or \
-            self._audio_events_params['speak_action_uri'] in ('', None):
-            self.log.warn('Cannot send speak command - Check config!')
+        if self._audio_events_params['speak_action_uri'] in ('', None):
+            self.log.warn(
+                'Cannot send speak command - speak_action_uri is not defined'
+            )
             return
         speak_goal_data = {
             'text': text,
@@ -897,12 +903,25 @@ class AppManager(object):
         self._speak_action.send_goal(speak_goal_data, timeout=1)
 
     def _vocal_app_installed(self, app_name: str):
+        if not self._audio_events_params['app_installed_event']:
+            self.log.warn('App Installed Event is disabled!')
+            return
         text = f'Η εγκατάσταση της εφαρμογής {app_name} ολοκληρώθηκε με επιτυχία'
         self._speak(text=text)
 
-    def _vocal_app_uninstalled(self, app_name: str):
+    def _vocal_app_deleted(self, app_name: str):
+        if not self._audio_events_params['app_deleted_event']:
+            self.log.warn('App Installed Event is disabled!')
+            return
         text = f'Η απεγκατάσταση της εφαρμογής {app_name} ολοκληρώθηκε με επιτυχία'
         self._speak(text=text)
+
+    def _play_sound_effect(self, sound_effect_id: str):
+        _file = f'{sound_effect_id}.wav'
+        _se_dir = self._audio_events_params['sound_effects_dir']
+        _fpath = pathlib.Path(_se_dir).expanduser().joinpath(_file)
+        self.log.warn(f'Playing sound effect: {_fpath}')
+        proc = subprocess.Popen(['aplay', _fpath])
 
     def run(self):
         self._send_connected_event()

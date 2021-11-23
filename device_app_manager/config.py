@@ -243,14 +243,35 @@ def load_cfg(cfg_file):
     ## ------------------ Audio-Events Parameters ----------------------
     ## ----------------------------------------------------------------
     try:
-        audio_events_enable = config.getboolean('audio_events', 'enable')
+        app_installed_event = config.getboolean('audio_events',
+                                                'app_installed_event')
     except configparser.NoOptionError:
-        audio_events_enable = 1
+        app_installed_event = 1
+    try:
+        app_deleted_event = config.getboolean('audio_events',
+                                              'app_deleted_event')
+    except configparser.NoOptionError:
+        app_deleted_event = 1
     try:
         speak_action_uri = config.get('audio_events', 'speak_action_uri')
     except configparser.NoOptionError:
         speak_action_uri = \
             '/robot/robot_1/actuator/audio/speaker/usb_speaker/d0/id_0/speak'
+    try:
+        sound_effects_dir = config.get('audio_events', 'sound_effects_dir')
+    except configparser.NoOptionError:
+        sound_effects_dir = \
+            '~/.sound_effects'
+    try:
+        app_started_event = config.getboolean('audio_events',
+                                              'app_started_event')
+    except configparser.NoOptionError:
+        app_started_event = 1
+    try:
+        app_termination_event = config.getboolean('audio_events',
+                                                  'app_termination_event')
+    except configparser.NoOptionError:
+        app_termination_event = 1
     ## ------------------------------------------------------------
     ## ------------------ DB Parameters  -----------------------
     ## ------------------------------------------------------------
@@ -341,7 +362,11 @@ def load_cfg(cfg_file):
             'stop_rpc': ui_stop_rpc
         },
         'audio_events': {
-            'enable': audio_events_enable,
-            'speak_action_uri': speak_action_uri
+            'app_installed_event': app_installed_event,
+            'app_deleted_event': app_deleted_event,
+            'speak_action_uri': speak_action_uri,
+            'sound_effects_dir': sound_effects_dir,
+            'app_started_event': app_started_event,
+            'app_termination_event': app_termination_event
         }
     }
