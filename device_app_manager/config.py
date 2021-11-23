@@ -46,6 +46,10 @@ def load_cfg(cfg_file):
         device_id = config.get('core', 'device_id')
     except configparser.NoOptionError:
         device_id = 'device0'
+    try:
+        single_app_mode = config.getboolean('core', 'single_app_mode')
+    except configparser.NoOptionError:
+        single_app_mode = True
     ## -------------------------------------------------------------
     ## ----------------------- Platform Broker Parameters -------------------
     ## -------------------------------------------------------------
@@ -299,7 +303,8 @@ def load_cfg(cfg_file):
             'keep_app_tarballls': keep_app_tarballls,
             'app_storage_dir': app_storage_dir,
             'app_image_prefix': app_image_prefix,
-            'uri_namespace': uri_namespace
+            'uri_namespace': uri_namespace,
+            'single_app_mode': single_app_mode
         },
         'platform_broker': {
             'type': platform_broker_type,

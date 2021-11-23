@@ -63,9 +63,11 @@ class AppManager(object):
         self._custom_ui_handler_params = custom_ui_handler_params
         self._audio_events_params = audio_events_params
 
+        self._single_app_mode = core_params['single_app_mode']
+        self._app_running = False
         self.debug = core_params['debug']
 
-        self.log = Logger('AppManager', debug=True)
+        self.log = Logger('AppManager', debug=self.debug)
 
         if db_params['type'] == 'redis':
             conn_params = RedisConnectionParams(
@@ -140,7 +142,7 @@ class AppManager(object):
         for app in _apps:
             try:
                 if app['scheduler_params']['start_on_boot']:
-                    self.start_app(app['name'])
+                    self.start_app(app['name'], force=True)
             except:
                 pass
 
@@ -218,6 +220,7 @@ class AppManager(object):
                 f'Error while trying to remove UI component for app {app_name}',
                 exc_info=False
             )
+            self.log.error(e)
         try:
             if _app['voice_commands'] is not None:
                 self.log.info(f'Deleting Rhasspy intent for app <{app_name}>')
@@ -241,7 +244,8 @@ class AppManager(object):
             self.log.error(f'Error on calling vocal_app_installed')
             self.log.error(e, exc_info=True)
 
-    def start_app(self, app_name, app_args=[], auto_remove=False):
+    def start_app(self, app_name: str, app_args: list = [],
+                  auto_remove: bool = False, force: bool = False):
         """start_app.
 
         Args:
@@ -250,13 +254,16 @@ class AppManager(object):
             auto_remove: Autoremove application from local repo upon termination
                 of the current execution. Used for testing applications.
         """
+        if self._single_app_mode and self._app_running and not force:
+            raise ValueError(f'AppManager is running in single app mode, which means that only one application can be active!')
+
         if not self.db.app_exists(app_name):
             raise ValueError(f'App <{app_name}> does not exist locally')
 
         app = self.db.get_app(app_name)
 
         if app['state'] == 1:
-            raise ValueError('Application is allready running.')
+            raise ValueError(f'Application {app_name} is allready running.')
 
         _logs_topic = self._app_params['app_logs_topic']
         _logs_topic = self._add_platform_ns(_logs_topic)
@@ -275,12 +282,14 @@ class AppManager(object):
         self._start_app_ui_component(app_id)
         if self._audio_events_params['app_started_event']:
             self._play_sound_effect('app_started')
+        self._app_running = True
 
     def _on_app_stopped(self, app_id: str):
         self._send_app_stopped_event(app_id)
         self._stop_app_ui_component(app_id)
         if self._audio_events_params['app_termination_event']:
             self._play_sound_effect('app_termination')
+        self._app_running = False
 
     def stop_app(self, app_name):
         if not self.db.app_exists(app_name):
@@ -590,6 +599,7 @@ class AppManager(object):
         except Exception as e:
             self.log.error(f'Error while installing application {app_name}',
                            exc_info=True)
+            self.log.error(e)
             return {
                 'status': 404,
                 'app_id': '',
@@ -622,6 +632,7 @@ class AppManager(object):
         except Exception as e:
             self.log.error(f'Error while deleting app {app_name}',
                            exc_info=True)
+            self.log.error(e)
             return {
                 'status': 404,
                 'error': str(e)
@@ -653,6 +664,7 @@ class AppManager(object):
         except Exception as e:
             self.log.error(f'Error while deploying application {app_name}' +
                            ' container', exc_info=False)
+            self.log.error(e)
             resp['status'] = 404
             resp['error'] = str(e)
         finally:
@@ -684,6 +696,7 @@ class AppManager(object):
         except Exception as e:
             self.log.error(f'Error while trying to stop app {app_name}',
                            exc_info=True)
+            self.log.error(e)
             resp['status'] = 404
             resp['error'] = str(e)
         finally:
