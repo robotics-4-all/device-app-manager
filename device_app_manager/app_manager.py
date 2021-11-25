@@ -11,6 +11,7 @@ import sys
 import threading
 import time
 import uuid
+import pathlib
 
 import docker
 from commlib.events import Event
@@ -62,9 +63,11 @@ class AppManager(object):
         self._custom_ui_handler_params = custom_ui_handler_params
         self._audio_events_params = audio_events_params
 
+        self._single_app_mode = core_params['single_app_mode']
+        self._app_running = False
         self.debug = core_params['debug']
 
-        self.log = Logger('AppManager', debug=True)
+        self.log = Logger('AppManager', debug=self.debug)
 
         if db_params['type'] == 'redis':
             conn_params = RedisConnectionParams(
@@ -139,7 +142,7 @@ class AppManager(object):
         for app in _apps:
             try:
                 if app['scheduler_params']['start_on_boot']:
-                    self.start_app(app['name'])
+                    self.start_app(app['name'], force=True)
             except:
                 pass
 
@@ -168,10 +171,18 @@ class AppManager(object):
         # Set rhassphy sentences for activating the application.
         ## Look here: https://github.com/robotics-4-all/sythes-voice-events-system
         if _app.voice_commands is not None:
-            self.log.info('Setting Rhasspy Sentences...')
-            resp = self._set_rhasspy_sentences(app_name, _app.voice_commands)
+            try:
+                resp = self._set_rhasspy_sentences(app_name, _app.voice_commands)
+            except Exception as e:
+                self.log.error(f'Error on calling set_rhasspy_sentences')
+                self.log.error(e, exc_info=True)
 
         self.db.save_db()
+        try:
+            self._vocal_app_installed(app_name)
+        except Exception as e:
+            self.log.error(f'Error on calling vocal_app_installed')
+            self.log.error(e, exc_info=True)
         return app_name
 
     def delete_app(self, app_name: str, force_stop: bool = False):
@@ -209,6 +220,7 @@ class AppManager(object):
                 f'Error while trying to remove UI component for app {app_name}',
                 exc_info=False
             )
+            self.log.error(e)
         try:
             if _app['voice_commands'] is not None:
                 self.log.info(f'Deleting Rhasspy intent for app <{app_name}>')
@@ -226,8 +238,14 @@ class AppManager(object):
                 exc_info=False
             )
         self.db.save_db()
+        try:
+            self._vocal_app_deleted(app_name)
+        except Exception as e:
+            self.log.error(f'Error on calling vocal_app_installed')
+            self.log.error(e, exc_info=True)
 
-    def start_app(self, app_name, app_args=[], auto_remove=False):
+    def start_app(self, app_name: str, app_args: list = [],
+                  auto_remove: bool = False, force: bool = False):
         """start_app.
 
         Args:
@@ -236,13 +254,16 @@ class AppManager(object):
             auto_remove: Autoremove application from local repo upon termination
                 of the current execution. Used for testing applications.
         """
+        if self._single_app_mode and self._app_running and not force:
+            raise ValueError(f'AppManager is running in single app mode, which means that only one application can be active!')
+
         if not self.db.app_exists(app_name):
             raise ValueError(f'App <{app_name}> does not exist locally')
 
         app = self.db.get_app(app_name)
 
         if app['state'] == 1:
-            raise ValueError('Application is allready running.')
+            raise ValueError(f'Application {app_name} is allready running.')
 
         _logs_topic = self._app_params['app_logs_topic']
         _logs_topic = self._add_platform_ns(_logs_topic)
@@ -259,10 +280,16 @@ class AppManager(object):
     def _on_app_started(self, app_id: str):
         self._send_app_started_event(app_id)
         self._start_app_ui_component(app_id)
+        if self._audio_events_params['app_started_event']:
+            self._play_sound_effect('app_started')
+        self._app_running = True
 
     def _on_app_stopped(self, app_id: str):
         self._send_app_stopped_event(app_id)
         self._stop_app_ui_component(app_id)
+        if self._audio_events_params['app_termination_event']:
+            self._play_sound_effect('app_termination')
+        self._app_running = False
 
     def stop_app(self, app_name):
         if not self.db.app_exists(app_name):
@@ -572,6 +599,7 @@ class AppManager(object):
         except Exception as e:
             self.log.error(f'Error while installing application {app_name}',
                            exc_info=True)
+            self.log.error(e)
             return {
                 'status': 404,
                 'app_id': '',
@@ -604,6 +632,7 @@ class AppManager(object):
         except Exception as e:
             self.log.error(f'Error while deleting app {app_name}',
                            exc_info=True)
+            self.log.error(e)
             return {
                 'status': 404,
                 'error': str(e)
@@ -635,6 +664,7 @@ class AppManager(object):
         except Exception as e:
             self.log.error(f'Error while deploying application {app_name}' +
                            ' container', exc_info=False)
+            self.log.error(e)
             resp['status'] = 404
             resp['error'] = str(e)
         finally:
@@ -666,6 +696,7 @@ class AppManager(object):
         except Exception as e:
             self.log.error(f'Error while trying to stop app {app_name}',
                            exc_info=True)
+            self.log.error(e)
             resp['status'] = 404
             resp['error'] = str(e)
         finally:
@@ -815,7 +846,7 @@ class AppManager(object):
             'sentences': sentences
         }
         self.log.info('Calling Rhasspy Add-Sentences RPC...')
-        resp = self._rhasspy_add_sentences.call(msg)
+        resp = self._rhasspy_add_sentences.call(msg, timeout=10)
         return resp
 
     def _start_app_ui_component(self, app_name: str) -> None:
@@ -870,6 +901,40 @@ class AppManager(object):
             uri = f'{_platform_ns}.{uri}'
         uri = uri.replace('{DEVICE_ID}', self._core_params['device_id'])
         return uri
+
+    def _speak(self, text: str, volume: int = 75, lang: str = 'el'):
+        if self._audio_events_params['speak_action_uri'] in ('', None):
+            self.log.warn(
+                'Cannot send speak command - speak_action_uri is not defined'
+            )
+            return
+        speak_goal_data = {
+            'text': text,
+            'volume': volume,
+            'language': lang
+        }
+        self._speak_action.send_goal(speak_goal_data, timeout=1)
+
+    def _vocal_app_installed(self, app_name: str):
+        if not self._audio_events_params['app_installed_event']:
+            self.log.warn('App Installed Event is disabled!')
+            return
+        text = f'Η εγκατάσταση της εφαρμογής {app_name} ολοκληρώθηκε με επιτυχία'
+        self._speak(text=text)
+
+    def _vocal_app_deleted(self, app_name: str):
+        if not self._audio_events_params['app_deleted_event']:
+            self.log.warn('App Installed Event is disabled!')
+            return
+        text = f'Η απεγκατάσταση της εφαρμογής {app_name} ολοκληρώθηκε με επιτυχία'
+        self._speak(text=text)
+
+    def _play_sound_effect(self, sound_effect_id: str):
+        _file = f'{sound_effect_id}.wav'
+        _se_dir = self._audio_events_params['sound_effects_dir']
+        _fpath = pathlib.Path(_se_dir).expanduser().joinpath(_file)
+        self.log.warn(f'Playing sound effect: {_fpath}')
+        proc = subprocess.Popen(['aplay', _fpath])
 
     def run(self):
         self._send_connected_event()

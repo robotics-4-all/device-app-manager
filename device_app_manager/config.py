@@ -46,6 +46,10 @@ def load_cfg(cfg_file):
         device_id = config.get('core', 'device_id')
     except configparser.NoOptionError:
         device_id = 'device0'
+    try:
+        single_app_mode = config.getboolean('core', 'single_app_mode')
+    except configparser.NoOptionError:
+        single_app_mode = True
     ## -------------------------------------------------------------
     ## ----------------------- Platform Broker Parameters -------------------
     ## -------------------------------------------------------------
@@ -243,14 +247,35 @@ def load_cfg(cfg_file):
     ## ------------------ Audio-Events Parameters ----------------------
     ## ----------------------------------------------------------------
     try:
-        audio_events_enable = config.get('audio_events', 'enable')
+        app_installed_event = config.getboolean('audio_events',
+                                                'app_installed_event')
     except configparser.NoOptionError:
-        audio_events_enable = 1
+        app_installed_event = 1
+    try:
+        app_deleted_event = config.getboolean('audio_events',
+                                              'app_deleted_event')
+    except configparser.NoOptionError:
+        app_deleted_event = 1
     try:
         speak_action_uri = config.get('audio_events', 'speak_action_uri')
     except configparser.NoOptionError:
         speak_action_uri = \
             '/robot/robot_1/actuator/audio/speaker/usb_speaker/d0/id_0/speak'
+    try:
+        sound_effects_dir = config.get('audio_events', 'sound_effects_dir')
+    except configparser.NoOptionError:
+        sound_effects_dir = \
+            '~/.sound_effects'
+    try:
+        app_started_event = config.getboolean('audio_events',
+                                              'app_started_event')
+    except configparser.NoOptionError:
+        app_started_event = 1
+    try:
+        app_termination_event = config.getboolean('audio_events',
+                                                  'app_termination_event')
+    except configparser.NoOptionError:
+        app_termination_event = 1
     ## ------------------------------------------------------------
     ## ------------------ DB Parameters  -----------------------
     ## ------------------------------------------------------------
@@ -278,7 +303,8 @@ def load_cfg(cfg_file):
             'keep_app_tarballls': keep_app_tarballls,
             'app_storage_dir': app_storage_dir,
             'app_image_prefix': app_image_prefix,
-            'uri_namespace': uri_namespace
+            'uri_namespace': uri_namespace,
+            'single_app_mode': single_app_mode
         },
         'platform_broker': {
             'type': platform_broker_type,
@@ -341,7 +367,11 @@ def load_cfg(cfg_file):
             'stop_rpc': ui_stop_rpc
         },
         'audio_events': {
-            'enable': audio_events_enable,
-            'speak_action_uri': speak_action_uri
+            'app_installed_event': app_installed_event,
+            'app_deleted_event': app_deleted_event,
+            'speak_action_uri': speak_action_uri,
+            'sound_effects_dir': sound_effects_dir,
+            'app_started_event': app_started_event,
+            'app_termination_event': app_termination_event
         }
     }
