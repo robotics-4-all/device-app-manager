@@ -319,7 +319,6 @@ class AppManager(object):
         self.install_app(app_name, app_type, app_tarball_path)
         time.sleep(1)
         self.start_app(app_name, app_args=app_args, auto_remove=True)
-        self.delete_app(app_name, force_stop=False)
         return app_name
 
     def _init_platform_node(self):
