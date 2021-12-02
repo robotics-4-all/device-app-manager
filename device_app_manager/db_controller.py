@@ -18,7 +18,7 @@ class RedisConnectionParams(object):
     def __init__(self, **kwargs):
         self.host = 'localhost'
         self.port = 6379
-        self.db = 0
+        self.db = 1
         self.password = None
 
         if 'host' in kwargs:
