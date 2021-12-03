@@ -47,7 +47,7 @@ class AppManager(object):
                  monitoring_params,
                  app_params,
                  control_params,
-                 rhasspy_params,
+                 rasa_params,
                  custom_ui_handler_params,
                  audio_events_params):
         atexit.register(self._cleanup)
@@ -59,7 +59,7 @@ class AppManager(object):
         self._monitoring_params = monitoring_params
         self._app_params = app_params
         self._control_params = control_params
-        self._rhasspy_params = rhasspy_params
+        self._rasa_params = rasa_params
         self._custom_ui_handler_params = custom_ui_handler_params
         self._audio_events_params = audio_events_params
 
@@ -99,7 +99,8 @@ class AppManager(object):
         self._init_local_node()
         self._init_platform_node()
 
-        self._init_rhassy_endpoints()
+        if self._rasa_params['enable']:
+            self._init_rasa_endpoints()
         self._init_custom_ui_handler_endpoints()
         self._init_speak_client()
 
@@ -157,7 +158,9 @@ class AppManager(object):
             app_tarball_path (str): The path to the application tarball
         """
         _app = self.app_builder.build_app(app_name, app_type, app_tarball_path)
-        self.log.info(f'Application {app_name}<{app_type}> was build succesfully')
+        self.log.info(
+            f'Application {app_name}<{app_type}> was build succesfully'
+        )
 
         if self.db.app_exists(app_name):
             ## Updating app
@@ -168,14 +171,14 @@ class AppManager(object):
             self.log.info(f'Storing new App in DB: <{app_name}>')
             self.db.add_app(_app.serialize())
 
-        # Set rhassphy sentences for activating the application.
-        ## Look here: https://github.com/robotics-4-all/sythes-voice-events-system
         if _app.voice_commands is not None:
             try:
-                resp = self._set_rhasspy_sentences(app_name, _app.voice_commands)
+                resp = self._call_rasa_train(app_name, _app.voice_commands)
             except Exception as e:
-                self.log.error(f'Error on calling set_rhasspy_sentences')
-                self.log.error(e, exc_info=True)
+                self.log.error(
+                    f'Error on calling Rasa Train (__call_rasa_train)',
+                    exc_info=True
+                )
 
         self.db.save_db()
         try:
@@ -223,11 +226,14 @@ class AppManager(object):
             self.log.error(e)
         try:
             if _app['voice_commands'] is not None:
-                self.log.info(f'Deleting Rhasspy intent for app <{app_name}>')
-                resp = self._delete_rhasspy_intent(app_name)
+                self.log.warn(
+                    f'No Operation exists for deleting app from RASA NLU model'
+                )
+                # TODO!!
         except Exception:
             self.log.warn(
-                f'Failed to delete voice_commands for app {app_name}',
+                f'Failed to retrain Rasa model after deletion of '
+                f'<{app_name}> app',
                 exc_info=False
             )
         try:
@@ -539,17 +545,14 @@ class AppManager(object):
         if not os.path.exists(self._core_params['app_storage_dir']):
             os.mkdir(self._core_params['app_storage_dir'])
 
-    def _init_rhassy_endpoints(self):
-        rpc_name = self._rhasspy_params['add_sentences_rpc'].replace(
-            '{DEVICE_ID}', self._core_params['device_id'])
-        self._rhasspy_add_sentences = self._local_node.create_rpc_client(
+    def _init_rasa_endpoints(self):
+        rpc_name = self._rasa_params['training_rpc'].replace(
+            '{DEVICE_ID}', self._core_params['device_id']
+        )
+        self._rasa_train = self._local_node.create_rpc_client(
             rpc_name=rpc_name,
-            debug=self.debug)
-        rpc_name = self._rhasspy_params['delete_intent_rpc'].replace(
-            '{DEVICE_ID}', self._core_params['device_id'])
-        self._rhasspy_delete_intent = self._local_node.create_rpc_client(
-            rpc_name=rpc_name,
-            debug=self.debug)
+            debug=self.debug
+        )
 
     def _delete_rhasspy_intent(self, app_id):
         req = {
@@ -839,13 +842,16 @@ class AppManager(object):
             f.write(tarball_decoded)
             return tarball_path
 
-    def _set_rhasspy_sentences(self, intent, sentences):
+    def _call_rasa_train(self, intent, sentences):
+        apps = self.db.get_apps()
+        _appd = {}
+        for app in apps:
+            _appd[app['name']] = app['voice_commands']
         msg = {
-            'intent': intent,
-            'sentences': sentences
+            'data': _appd
         }
-        self.log.info('Calling Rhasspy Add-Sentences RPC...')
-        resp = self._rhasspy_add_sentences.call(msg, timeout=10)
+        self.log.info('Calling Rasa Train...')
+        resp = self._rasa_train.call(msg, timeout=1)
         return resp
 
     def _start_app_ui_component(self, app_name: str) -> None:

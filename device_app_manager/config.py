@@ -231,18 +231,17 @@ def load_cfg(cfg_file):
     except configparser.NoOptionError:
         ui_stop_rpc = 'ui.custom.stop'
     ## ------------------------------------------------------------
-    ## ------------------ Rhasspy Parameters ----------------------
+    ## ------------------ RASA Parameters ----------------------
     ## ------------------------------------------------------------
     try:
-        rhasspy_add_sentences_rpc = config.get('rhasspy',
-                                               'add_sentences_rpc')
+        rasa_nlu_enable = config.getboolean('rasa_nlu',
+                                              'enable')
     except configparser.NoOptionError:
-        rhasspy_add_sentences_rpc = 'rhasspy_manager.add_sentences'
+        rasa_nlu_enable = False
     try:
-        rhasspy_delete_intent_rpc = config.get('rhasspy',
-                                               'delete_intent_rpc')
+        rasa_training_rpc = config.get('rasa_nlu', 'add_sentences_rpc')
     except configparser.NoOptionError:
-        rhasspy_delete_intent_rpc = 'rhasspy_manager.delete_intent'
+        rasa_training_rpc = 'rasa_nlu.training'
     ## -----------------------------------------------------------------
     ## ------------------ Audio-Events Parameters ----------------------
     ## ----------------------------------------------------------------
@@ -358,9 +357,9 @@ def load_cfg(cfg_file):
             'alive_rpc_name': alive_rpc_name,
             'fast_deploy_rpc_name': fast_deploy_rpc_name
         },
-        'rhasspy': {
-            'add_sentences_rpc': rhasspy_add_sentences_rpc,
-            'delete_intent_rpc': rhasspy_delete_intent_rpc
+        'rasa_nlu': {
+            'enable': rasa_nlu_enable,
+            'training_rpc': rasa_training_rpc
         },
         'custom_ui_handler': {
             'start_rpc': ui_start_rpc,

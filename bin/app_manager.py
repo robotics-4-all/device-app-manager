@@ -40,7 +40,7 @@ def main():
         config['monitoring'],
         config['applications'],
         config['control'],
-        config['rhasspy'],
+        config['rasa_nlu'],
         config['custom_ui_handler'],
         config['audio_events']
     )
