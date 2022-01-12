@@ -195,7 +195,19 @@ class AppBuilderDocker(object):
         return self._read_yaml_file(fpath)
 
     def _read_scheduler_params(self, fpath):
-        return self._read_yaml_file(fpath)
+        params = self._read_yaml_file(fpath)
+
+        scheduler_params = {}
+        if 'params' in scheduler_params:
+            for param in params:
+                try:
+                    scheduler_params[param['name']] = param['value']
+                except:
+                    pass
+        else:
+            scheduler_params = params
+        
+        return scheduler_params
 
     def _read_voice_activation_params(self, fpath):
         with open(fpath, 'r') as fstream:
