@@ -196,17 +196,21 @@ class AppBuilderDocker(object):
 
     def _read_scheduler_params(self, fpath):
         params = self._read_yaml_file(fpath)
-
+        print("******************ADDING PARAMETER*************************", params)
         scheduler_params = {}
         if 'params' in scheduler_params:
+            print("NEW FORMAT")
             for param in params:
                 try:
                     scheduler_params[param['name']] = param['value']
                 except:
                     pass
         else:
+            print("OLD FORMAT")
             scheduler_params = params
         
+        print(params)
+
         return scheduler_params
 
     def _read_voice_activation_params(self, fpath):

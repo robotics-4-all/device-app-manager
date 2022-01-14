@@ -141,6 +141,7 @@ class AppManager(object):
         _apps = self.db.get_apps()
         for app in _apps:
             try:
+                print(app['name'], app['scheduling'])
                 if app['scheduler_params']['start_on_boot']:
                     self.start_app(app['name'], force=True)
             except:
