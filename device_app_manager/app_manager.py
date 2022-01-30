@@ -171,16 +171,17 @@ class AppManager(object):
             self.log.info(f'Storing new App in DB: <{app_name}>')
             self.db.add_app(_app.serialize())
 
+        self.db.save_db()
+
         if _app.voice_commands is not None:
             try:
-                resp = self._call_rasa_train(app_name, _app.voice_commands)
+                resp = self._call_rasa_train()
             except Exception as e:
                 self.log.error(
                     f'Error on calling Rasa Train (__call_rasa_train)',
                     exc_info=True
                 )
 
-        self.db.save_db()
         try:
             self._vocal_app_installed(app_name)
         except Exception as e:
@@ -842,7 +843,7 @@ class AppManager(object):
             f.write(tarball_decoded)
             return tarball_path
 
-    def _call_rasa_train(self, intent, sentences):
+    def _call_rasa_train(self):
         apps = self.db.get_apps()
         _appd = {}
         for app in apps:
