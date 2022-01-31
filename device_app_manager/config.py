@@ -188,13 +188,13 @@ def load_cfg(cfg_file):
     ## -------------- Application Interfaces ----------------------
     ## ------------------------------------------------------------
     try:
-        app_started_event = config.get('applications', 'app_started_event')
+        app_started_event_uri = config.get('applications', 'app_started_event')
     except configparser.NoOptionError:
-        app_started_event = 'app.y.started'
+        app_started_event_uri = 'app.{APP_ID}.started'
     try:
-        app_stopped_event = config.get('applications', 'app_stopped_event')
+        app_stopped_event_uri = config.get('applications', 'app_stopped_event')
     except configparser.NoOptionError:
-        app_stopped_event = 'app.y.stopped'
+        app_stopped_event_uri = 'app.{APP_ID}.stopped'
     try:
         app_logs_topic = config.get('applications', 'app_logs_topic')
     except configparser.NoOptionError:
@@ -339,8 +339,8 @@ def load_cfg(cfg_file):
             'disconnected_event': disconnected_event,
         },
         'applications': {
-            'app_started_event': app_started_event,
-            'app_stopped_event': app_stopped_event,
+            'app_started_event': app_started_event_uri,
+            'app_stopped_event': app_stopped_event_uri,
             'app_logs_topic': app_logs_topic,
             'app_stats_topic': app_stats_topic,
             'publish_app_logs': publish_app_logs,
