@@ -183,7 +183,8 @@ class AppManager(object):
                 )
 
         try:
-            self._vocal_app_installed(_app.serialize()['info']['display_name'])
+            pass
+            # self._vocal_app_installed(_app['info']['display_name'])
         except Exception as e:
             self.log.error(f'Error on calling vocal_app_installed')
             self.log.error(e, exc_info=True)
@@ -246,7 +247,7 @@ class AppManager(object):
             )
         self.db.save_db()
         try:
-            self._vocal_app_deleted(_app.serialize()['info']['display_name'])
+            self._vocal_app_deleted(_app['info']['display_name'])
         except Exception as e:
             self.log.error(f'Error on calling vocal_app_installed')
             self.log.error(e, exc_info=True)
