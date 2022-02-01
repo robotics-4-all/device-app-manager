@@ -213,7 +213,7 @@ class AppManager(object):
 
         _app = self.db.get_app(app_name)
 
-        # Check if app has ui and remove it
+        # --> Check if app has ui and remove it
         try:
             if _app['ui'] is not None:
                 target_dir = os.path.join(
@@ -225,18 +225,7 @@ class AppManager(object):
                 exc_info=False
             )
             self.log.error(e)
-        try:
-            if _app['voice_commands'] is not None:
-                self.log.warn(
-                    f'No Operation exists for deleting app from RASA NLU model'
-                )
-                # TODO!!
-        except Exception:
-            self.log.warn(
-                f'Failed to retrain Rasa model after deletion of '
-                f'<{app_name}> app',
-                exc_info=False
-            )
+        # --> Delete App from local DB
         try:
             self.db.delete_app(app_name)
         except Exception:
@@ -245,6 +234,22 @@ class AppManager(object):
                 exc_info=False
             )
         self.db.save_db()
+
+        # --> RASA Train
+        try:
+            if _app['voice_commands'] is not None:
+                resp = self._call_rasa_train()
+        except Exception:
+            self.log.error(
+                f'Error on calling Rasa Train (__call_rasa_train)',
+                exc_info=True
+            )
+            self.log.warn(
+                f'Failed to retrain Rasa model after deletion of '
+                f'<{app_name}> app',
+                exc_info=False
+            )
+        # --> Vocally inform the user about deletion of the application
         try:
             self._vocal_app_deleted(app_name)
         except Exception as e:
