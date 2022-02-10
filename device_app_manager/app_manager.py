@@ -147,7 +147,7 @@ class AppManager(object):
             except:
                 pass
 
-    def install_app(self, app_name: str, app_type: str, app_tarball_path: str):
+    def install_app(self, app_name: str, app_type: str, app_tarball_path: str, train_rasa: bool = True):
         """install_app.
         Install an application locally on the device. Builds the docker image
             and stores information on the local repository.
@@ -176,7 +176,7 @@ class AppManager(object):
 
         self.db.save_db()
 
-        if _app.voice_commands is not None:
+        if _app.voice_commands is not None and train_rasa == True:
             try:
                 new_vc = _app.voice_commands
                 new_vc.sort()
@@ -264,7 +264,8 @@ class AppManager(object):
             )
         # --> Vocally inform the user about deletion of the application
         try:
-            self._vocal_app_deleted(_app['info']['display_name'])
+            pass
+            # self._vocal_app_deleted(_app['info']['display_name'])
         except Exception as e:
             self.log.error(f'Error on calling vocal_app_installed')
             self.log.error(e, exc_info=True)
@@ -341,7 +342,7 @@ class AppManager(object):
         """
         Executes a sequence of INSTALL-START-DELETE operations for an app
         """
-        self.install_app(app_name, app_type, app_tarball_path)
+        self.install_app(app_name, app_type, app_tarball_path, train_rasa=False)
         time.sleep(1)
         self.start_app(app_name, app_args=app_args, auto_remove=True)
         return app_name
