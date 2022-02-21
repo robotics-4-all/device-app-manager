@@ -188,9 +188,18 @@ def load_cfg(cfg_file):
     ## -------------- Application Interfaces ----------------------
     ## ------------------------------------------------------------
     try:
+        app_started_event_global_uri = config.get('applications', 'app_started_event_global')
+    except configparser.NoOptionError:
+        app_started_event_global_uri = 'app_manager.app_started'
+    try:
         app_started_event_uri = config.get('applications', 'app_started_event')
     except configparser.NoOptionError:
         app_started_event_uri = 'app.{APP_ID}.started'
+
+    try:
+        app_stopped_event_global_uri = config.get('applications', 'app_stopped_event_global')
+    except configparser.NoOptionError:
+        app_stopped_event_global_uri = 'app.stopped'
     try:
         app_stopped_event_uri = config.get('applications', 'app_stopped_event')
     except configparser.NoOptionError:
@@ -345,7 +354,9 @@ def load_cfg(cfg_file):
             'app_stats_topic': app_stats_topic,
             'publish_app_logs': publish_app_logs,
             'publish_app_stats': publish_app_stats,
-            'app_ui_storage_dir': app_ui_storage_dir
+            'app_ui_storage_dir': app_ui_storage_dir,
+            'app_started_event_global': app_started_event_global_uri,
+            'app_stopped_event_global': app_stopped_event_global_uri
         },
         'control': {
             'app_delete_rpc_name': app_delete_rpc_name,

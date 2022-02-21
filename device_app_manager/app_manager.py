@@ -842,6 +842,11 @@ class AppManager(object):
         event = Event('Application-Started', _puri)
         self._platform_event_emitter.send_event(event)
 
+        _uri_g = self._app_params["app_started_event_global"]
+        _gluri = self._add_local_ns(_uri_g)
+        event = Event('Application-Started', _gluri)
+        self._local_event_emitter.send_event(event)
+
     def _send_app_stopped_event(self, app_id):
         _uri = f'{self._app_params["app_stopped_event"]}'
         _luri = self._add_local_ns(_uri).replace('{APP_ID}', app_id)
@@ -850,6 +855,11 @@ class AppManager(object):
         self._local_event_emitter.send_event(event)
         event = Event('Application-Stopped', _puri)
         self._platform_event_emitter.send_event(event)
+
+        _uri_g = self._app_params["app_stopped_event_global"]
+        _gluri = self._add_local_ns(_uri_g)
+        event = Event('Application-Stopped', _gluri)
+        self._local_event_emitter.send_event(event)
 
     def _store_app_tar(self, tar_b64, dest_dir):
         tarball_decoded = base64.b64decode(tar_b64)
