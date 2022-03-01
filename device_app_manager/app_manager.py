@@ -159,6 +159,11 @@ class AppManager(object):
         """
         old_vc = []
 
+        _uri_g = self._app_params["app_install_start_event"]
+        _gluri = self._add_local_ns(_uri_g)
+        event = Event('Application-Install', _gluri)
+        self._local_event_emitter.send_event(event)
+
         _app = self.app_builder.build_app(app_name, app_type, app_tarball_path)
         self.log.info(
             f'Application {app_name}<{app_type}> was build succesfully'
@@ -200,6 +205,13 @@ class AppManager(object):
         except Exception as e:
             self.log.error(f'Error on calling vocal_app_installed')
             self.log.error(e, exc_info=True)
+
+        _uri_g = self._app_params["app_install_end_event"]
+        _gluri = self._add_local_ns(_uri_g)
+        event = Event('Application-Install', _gluri)
+        self._local_event_emitter.send_event(event)
+
+
         return app_name
 
     def delete_app(self, app_name: str, force_stop: bool = False):
@@ -212,6 +224,11 @@ class AppManager(object):
         """
         if not self.db.app_exists(app_name):
             raise ValueError(f'App <{app_name}> does not exist locally')
+
+        _uri_g = self._app_params["app_uninstall_start_event"]
+        _gluri = self._add_local_ns(_uri_g)
+        event = Event('Application-Uninstall', _gluri)
+        self._local_event_emitter.send_event(event)
 
         if self.db.app_is_running(app_name) and force_stop:
             self.log.info(f'Stopping App <{app_name}> before deleting...')
@@ -269,6 +286,14 @@ class AppManager(object):
         except Exception as e:
             self.log.error(f'Error on calling vocal_app_installed')
             self.log.error(e, exc_info=True)
+
+        _uri_g = self._app_params["app_uninstall_end_event"]
+        _gluri = self._add_local_ns(_uri_g)
+        event = Event('Application-Uninstall', _gluri)
+        self._local_event_emitter.send_event(event)
+
+
+
 
     def start_app(self, app_name: str, app_args: list = [],
                   auto_remove: bool = False, force: bool = False):

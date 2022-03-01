@@ -197,9 +197,32 @@ def load_cfg(cfg_file):
         app_started_event_uri = 'app.{APP_ID}.started'
 
     try:
+        app_install_start_event_uri = config.get('applications',
+                                                 'app_install_start_event')
+    except configparser.NoOptionError:
+        app_install_event_uri = 'app.install.start'
+    try:
+        app_install_end_event_uri = config.get('applications',
+                                                 'app_install_end_event')
+    except configparser.NoOptionError:
+        app_install_end_event_uri = 'app.install.end'
+
+    try:
+        app_uninstall_start_event_uri = config.get('applications',
+                                                 'app_uninstall_start_event')
+    except configparser.NoOptionError:
+        app_uninstall_event_uri = 'app.uninstall.start'
+    try:
+        app_uninstall_end_event_uri = config.get('applications',
+                                                 'app_uninstall_end_event')
+    except configparser.NoOptionError:
+        app_uninstall_end_event_uri = 'app.uninstall.end'
+
+    try:
         app_stopped_event_global_uri = config.get('applications', 'app_stopped_event_global')
     except configparser.NoOptionError:
         app_stopped_event_global_uri = 'app.stopped'
+
     try:
         app_stopped_event_uri = config.get('applications', 'app_stopped_event')
     except configparser.NoOptionError:
@@ -350,6 +373,10 @@ def load_cfg(cfg_file):
         'applications': {
             'app_started_event': app_started_event_uri,
             'app_stopped_event': app_stopped_event_uri,
+            'app_install_start_event': app_install_start_event_uri,
+            'app_install_end_event': app_install_end_event_uri,
+            'app_uninstall_start_event': app_uninstall_start_event_uri,
+            'app_uninstall_end_event': app_uninstall_end_event_uri,
             'app_logs_topic': app_logs_topic,
             'app_stats_topic': app_stats_topic,
             'publish_app_logs': publish_app_logs,
