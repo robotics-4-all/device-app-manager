@@ -21,7 +21,7 @@ Usage example:
 ```bash
 ./get_running_apps.py             \
     --device-id device2           \
-    --host r4a-platform.ddns.net  \
+    --host issel08.ee.auth.gr  \
     --port 5782                   \
     --vhost /                     \
     --debug
@@ -36,7 +36,7 @@ Usage example:
 ```bash
 ./get_apps.py                     \
     --device-id device2           \
-    --host r4a-platform.ddns.net  \
+    --host issel08.ee.auth.gr  \
     --port 5782                   \
     --vhost /                     \
     --debug
@@ -53,7 +53,7 @@ Usage example:
 ./start_app.py \
     --app-id test-app
     --device-id device2 \
-    --host r4a-platform.ddns.net \
+    --host issel08.ee.auth.gr \
     --port 5782 \
     --vhost / \
     --debug \
@@ -70,7 +70,7 @@ Usage example:
 ./stop_app.py                     \
     --app-id test-app             \
     --device-id device2           \
-    --host r4a-platform.ddns.net  \
+    --host issel08.ee.auth.gr  \
     --port 5782                   \
     --vhost /                     \
     --debug
@@ -86,7 +86,7 @@ Usage example:
     --fpath app.tar.gz		  \
     --app-type r4a_ros2_py	  \
     --app-id test-app	          \
-    --host r4a-platform.ddns.net  \
+    --host issel08.ee.auth.gr  \
     --port 5782			  \
     --vhost /			  \
     --debug			  
@@ -98,7 +98,7 @@ Usage example:
 ./delete_app.py           \
     --device-id device2   \
     --app-id test_inf     \
-    --host 155.207.33.189 \
+    --host issel08.ee.auth.gr \
     --port 5782           \
     --vhost /             \
     --debug

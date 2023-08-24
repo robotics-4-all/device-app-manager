@@ -190,7 +190,7 @@ speak_action_uri = /robot/robot_1/actuator/audio/speaker/usb_speaker/d0/id_0/spe
 uri_namespace = thing.{DEVICE_ID}
 logging = 0
 type = AMQP
-host = r4a-platform.ddns.net
+host = issel08.ee.auth.gr
 port = 5782
 ; Vhost is used only in case of AMQP broker
 vhost = /
